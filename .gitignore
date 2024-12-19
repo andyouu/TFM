@@ -1,0 +1,44 @@
+# Virtual environment
+env/
+venv/
+
+# Python bytecode files
+*.pyc
+*.pyo
+__pycache__/
+
+# IDEs and editors
+.vscode/
+.idea/
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# macOS system files
+.DS_Store
+
+# Log files
+*.log
+
+# Distribution directories
+dist/
+build/
+*.egg-info/
+
+# Ignore data files (you can adjust based on your needs)
+# Example for ignoring data file types
+*.csv
+*.json
+*.xlsx
+*.xls
+*.sqlite
+*.h5
+
+# If you store data in a folder, for example 'data/', you can ignore the whole folder:
+data/
+
+# Optionally, ignore compressed data files (common formats for data storage)
+*.zip
+*.tar.gz
+*.tar
+*.7z

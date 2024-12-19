@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from typing import Tuple
 from datetime import timedelta
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
@@ -15,10 +16,11 @@ import os
 import matplotlib.patches as mpatches
 
 
-def obt_regressors(df,n):
+def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     """
     Summary:
-    This function processes the data needed to obtain the regressors and derives the formula for the glm
+    This function processes the data needed to obtain the regressors and derives the 
+    formula for the glm
 
     Args:
         df ([Dataframe]): [dataframe with experimental data]
@@ -26,44 +28,37 @@ def obt_regressors(df,n):
 
     Returns:
         new_df([Dataframe]): [dataframe with processed data restrcted to the regression]
-        regressors([string]) :  [regressioon formula]
+        regressors_string([string]) :  [regressioon formula]
     """
+    # Select the columns needed for the regressors
     new_df = df[['session', 'outcome', 'side', 'iti_duration']]
     new_df['outcome_bool'] = np.where(new_df['outcome'] == "correct", 1, 0)
 
     #A column with the choice of the mice will now be constructed
-    conditions = [(new_df['outcome_bool'] == 1) & (new_df['side'] == 'right'), (new_df['outcome_bool'] == 0) & (new_df['side'] == 'right'),
-                  (new_df['outcome_bool'] == 1) & (new_df['side'] == 'left'),(new_df['outcome_bool'] == 0) & (new_df['side'] == 'left')]
-    
-    choice = ['right','left','left','righ']
-    new_df['choice'] = np.select(conditions,choice)
-    # can be done nlike this
     new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'right'), 'choice'] = 'left'
     new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'left'), 'choice'] = 'left'
     new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'left'), 'choice'] = 'right'
     new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'right'), 'choice'] = 'right'
     new_df['choice'].fillna('other', inplace=True)
     
-    # preaper the data for the correct_choice regresor L_+
-    
-    new_df.loc[new_df['outcome_bool'] == 0, 'r_plus']  = '0'
+    # prepare the data for the correct_choice regresor L_+
+    new_df.loc[new_df['outcome_bool'] == 0, 'r_plus']  = 0
     new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'left'), 'r_plus'] = -1
     new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'right'), 'r_plus'] = 1
     new_df['r_plus'] = pd.to_numeric(new_df['r_plus'].fillna('other'), errors='coerce')
     
     # prepare the data for the wrong_choice regressor L- 
-
-    new_df.loc[new_df['outcome_bool'] == 1, 'r_minus']  = '1'
-    new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'left'), 'r_minus'] = 1
-    new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'right'), 'r_minus'] = -1
+    new_df.loc[new_df['outcome_bool'] == 1, 'r_minus']  = 0
+    new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'left'), 'r_minus'] = -1
+    new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'right'), 'r_minus'] = 1
     new_df['r_minus'] = pd.to_numeric(new_df['r_minus'].fillna('other'), errors='coerce')
 
-    #create a column where the side matche the regression notaion:
-
+    #create a column where the side matches the regression notaion:
     new_df.loc[new_df['choice'] == 'right', 'choice_num'] = 1
-    new_df.loc[new_df['choice'] == 'left', 'choice_num'] = -1
+    new_df.loc[new_df['choice'] == 'left', 'choice_num'] = 0
     new_df['choice'] = pd.to_numeric(new_df['choice'].fillna('other'), errors='coerce')
 
+    # build the regressors for previous trials
     regr_plus = ''
     regr_minus = ''
     for i in range(1, n + 1):
@@ -71,9 +66,9 @@ def obt_regressors(df,n):
         new_df[f'r_minus_{i}'] = new_df.groupby('session')['r_minus'].shift(i)
         regr_plus += f'r_plus_{i} + '
         regr_minus += f'r_minus_{i} + '
-    regressors = regr_plus + regr_minus[:-3]
+    regressors_string = regr_plus + regr_minus[:-3]
 
-    return new_df, regressors
+    return new_df, regressors_string
 
 def plot_GLM(ax, GLM_df, alpha=1):
     """
@@ -110,9 +105,13 @@ def plot_GLM(ax, GLM_df, alpha=1):
 def glm(n_bins_iti,iti_bins):
     mice_counter = 0
     f, axes = plt.subplots(1, len(df['subject'].unique()), figsize=(15, 5), sharey=True)
+    # iterate over mice
     for mice in df['subject'].unique():
         print(mice)
         df_mice = df.loc[df['subject'] == mice]
+        # fit glm ignoring iti values
+        df_glm_mice, regressors_string = obt_regressors(df=df_mice)
+        mM_logit = smf.logit(formula='choice_num ~ ' + regressors_string, data=df_glm_mice).fit()
         # get 3 equipopulated bins of iti values
         df_mice['iti_bins'] = pd.cut(df_mice['iti_duration'], iti_bins)
         df_glm_mice, regressors = obt_regressors(df=df_mice)

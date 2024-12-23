@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 from typing import Tuple
 from datetime import timedelta
+import matplotlib
+matplotlib.use('TkAgg') 
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import seaborn as sns
@@ -66,7 +68,7 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
         new_df[f'r_minus_{i}'] = new_df.groupby('session')['r_minus'].shift(i)
         regr_plus += f'r_plus_{i} + '
         regr_minus += f'r_minus_{i} + '
-    regressors_string = regr_plus + regr_minus[:-3]
+    regressors_string = regr_plus + regr_minus + 'iti_duration'
 
     return new_df, regressors_string
 
@@ -91,7 +93,8 @@ def plot_GLM(ax, GLM_df, alpha=1):
     # Create custom legend handles with labels and corresponding colors
     legend_handles = [
         mpatches.Patch(color='indianred', label='r+'),
-        mpatches.Patch(color='teal', label='r-')
+        mpatches.Patch(color='teal', label='r-'),
+        mpatches.Patch(color='black', label='iti')
     ]
 
     # Add legend with custom handles
@@ -102,7 +105,7 @@ def plot_GLM(ax, GLM_df, alpha=1):
     ax.set_ylabel('GLM weight')
     ax.set_xlabel('Previous trials')
 
-def glm(n_bins_iti,iti_bins):
+def glm():
     mice_counter = 0
     f, axes = plt.subplots(1, len(df['subject'].unique()), figsize=(15, 5), sharey=True)
     # iterate over mice
@@ -110,29 +113,20 @@ def glm(n_bins_iti,iti_bins):
         print(mice)
         df_mice = df.loc[df['subject'] == mice]
         # fit glm ignoring iti values
-        df_glm_mice, regressors_string = obt_regressors(df=df_mice)
+        df_glm_mice, regressors_string = obt_regressors(df=df_mice,n=10)
         mM_logit = smf.logit(formula='choice_num ~ ' + regressors_string, data=df_glm_mice).fit()
-        # get 3 equipopulated bins of iti values
-        df_mice['iti_bins'] = pd.cut(df_mice['iti_duration'], iti_bins)
-        df_glm_mice, regressors = obt_regressors(df=df_mice)
-        for iti_index in range(n_bins_iti):
-            iti = [iti_bins[iti_index], iti_bins[iti_index + 1]]
-            # get all trials within the iti bin
-            df_glm_mice_iti = df_glm_mice[df_glm_mice['iti_duration'].between(iti[0], iti[1])]
-            mM_logit = smf.logit(formula='choice_num ~ ' + regressors, data=df_glm_mice_iti).fit()
-            GLM_df = pd.DataFrame({
-                'coefficient': mM_logit.params,
-                'std_err': mM_logit.bse,
-                'z_value': mM_logit.tvalues,
-                'p_value': mM_logit.pvalues,
-                'conf_Interval_Low': mM_logit.conf_int()[0],
-                'conf_Interval_High': mM_logit.conf_int()[1]
-            })
-            # alpha = 1 if iti_index == 0 else subtract 0.3 for each iti_index
-            alpha = 1 - 0.3 * iti_index
-            # subplot title with name of mouse
-            axes[mice_counter].set_title(mice)
-            plot_GLM(axes[mice_counter], GLM_df, alpha=alpha)
+        GLM_df = pd.DataFrame({
+            'coefficient': mM_logit.params,
+            'std_err': mM_logit.bse,
+            'z_value': mM_logit.tvalues,
+            'p_value': mM_logit.pvalues,
+            'conf_Interval_Low': mM_logit.conf_int()[0],
+            'conf_Interval_High': mM_logit.conf_int()[1]
+        })
+        print(mM_logit.params)
+        # subplot title with name of mouse
+        axes[mice_counter].set_title(mice)
+        plot_GLM(axes[mice_counter], GLM_df)
         mice_counter += 1
     plt.show()
 
@@ -146,7 +140,5 @@ if __name__ == '__main__':
     df = df[df['task'] != 'S4']
     df = df[df['subject'] != 'manual']
     #select the iti bins
-    iti_bins = [0, 2, 6, 12, 20]
-    n_iti_bins = len(iti_bins)
-    glm(n_iti_bins,iti_bins)
+    glm()
     plt.show()

@@ -55,7 +55,7 @@ def obt_regressors(df,n,iti_bins) -> Tuple[pd.DataFrame, str]:
     new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'left'), 'r_minus'] = -1
     new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'right'), 'r_minus'] = 1
     new_df['r_minus'] = pd.to_numeric(new_df['r_minus'].fillna('other'), errors='coerce')
-
+    
     # prepare the data for the small_iti regressor  
     for i in range(len(iti_bins)-1):
         new_df.loc[(new_df['iti_duration'] > iti_bins[i]) & (new_df['iti_duration'] < iti_bins[i+1]), f'iti_bin_{i}'] = 1
@@ -82,11 +82,16 @@ def obt_regressors(df,n,iti_bins) -> Tuple[pd.DataFrame, str]:
     # build the regressors for previous trials
     regr_plus = ''
     regr_minus = ''
+    regressors_string = ''
+    for i in range(1, n + 1):
+        regr_plus += f'r_plus_{i} + '
+        regr_minus += f'r_minus_{i} + '
+    for j in range(len(iti_bins)-1): regressors_string += f'iti_bin_{j} + '
     for j in range(len(iti_bins)-1):        
         for i in range(1, n + 1):
             regr_plus += f'r_plus{i}_iti{j} + '
             regr_minus += f'r_minus{i}_iti{j} + '
-    regressors_string = regr_plus + regr_minus[:-3]
+    regressors_string += regr_plus + regr_minus[:-3]
 
     return new_df, regressors_string
 
@@ -129,7 +134,7 @@ def glm(df,iti_bins):
     for mice in df['subject'].unique():
         df_mice = df.loc[df['subject'] == mice]
         # fit glm ignoring iti values
-        df_glm_mice, regressors_string = obt_regressors(df=df_mice,n=10,iti_bins=iti_bins)
+        df_glm_mice, regressors_string = obt_regressors(df=df_mice,n=5,iti_bins=iti_bins)
         print(regressors_string)
         mM_logit = smf.logit(formula='choice_num ~ ' + regressors_string, data=df_glm_mice).fit()
         GLM_df = pd.DataFrame({

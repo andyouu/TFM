@@ -34,6 +34,7 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     """
     # Select the columns needed for the regressors
     new_df = df[['session', 'outcome', 'side', 'iti_duration']]
+    new_df = new_df.copy()
     new_df['outcome_bool'] = np.where(new_df['outcome'] == "correct", 1, 0)
 
     #A column with the choice of the mice will now be constructed
@@ -73,14 +74,13 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     return new_df, regressors_string
 
 def plot_GLM(ax, GLM_df, alpha=1):
-    """
-    Summary: In this function all the plotting of the glms is performed
+    """Summary: This function performs the glm plots
 
     Args:
         ax ([type]): [description]
         GLM_df ([type]): [description]
         alpha (int, optional): [description]. Defaults to 1.
-    """
+    """ 
     orders = np.arange(len(GLM_df))
 
     # filter the DataFrame to separate the coefficients
@@ -104,7 +104,7 @@ def plot_GLM(ax, GLM_df, alpha=1):
     ax.set_ylabel('GLM weight')
     ax.set_xlabel('Previous trials')
 
-def glm(n_bins_iti,iti_bins):
+def glm(df,n_bins_iti,iti_bins):
     """
     Defines the glm formula and fits the model with de data available
 
@@ -116,12 +116,11 @@ def glm(n_bins_iti,iti_bins):
     f, axes = plt.subplots(1, len(df['subject'].unique()), figsize=(15, 5), sharey=True)
     # iterate over mice
     for mice in df['subject'].unique():
-        print(mice)
         df_mice = df.loc[df['subject'] == mice]
+        df_mice=df_mice.copy()
         # fit glm ignoring iti values
         df_mice['iti_bins'] = pd.cut(df_mice['iti_duration'], iti_bins)
         df_glm_mice, regressors_string = obt_regressors(df=df_mice,n=10)
-        mM_logit = smf.logit(formula='choice_num ~ ' + regressors_string, data=df_glm_mice).fit()
         # get 3 equipopulated bins of iti values
         for iti_index in range(n_bins_iti-1):
             iti = [iti_bins[iti_index], iti_bins[iti_index + 1]]
@@ -141,6 +140,7 @@ def glm(n_bins_iti,iti_bins):
             # subplot title with name of mouse
             axes[mice_counter].set_title(mice)
             plot_GLM(axes[mice_counter], GLM_df, alpha=alpha)
+            #print(GLM_df)
         mice_counter += 1
     plt.show()
 
@@ -157,5 +157,4 @@ if __name__ == '__main__':
     #select the iti bins
     iti_bins = [0, 2, 6, 12, 20]
     n_iti_bins = len(iti_bins)
-    glm(n_iti_bins,iti_bins)
-    plt.show()
+    glm(df,n_iti_bins,iti_bins)

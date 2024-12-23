@@ -18,7 +18,7 @@ import os
 import matplotlib.patches as mpatches
 
 
-def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
+def obt_regressors(df,n,iti_bins) -> Tuple[pd.DataFrame, str]:
     """
     Summary:
     This function processes the data needed to obtain the regressors and derives the 
@@ -34,6 +34,7 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     """
     # Select the columns needed for the regressors
     new_df = df[['session', 'outcome', 'side', 'iti_duration']]
+    new_df = new_df.copy()
     new_df['outcome_bool'] = np.where(new_df['outcome'] == "correct", 1, 0)
 
     #A column with the choice of the mice will now be constructed
@@ -55,20 +56,37 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'right'), 'r_minus'] = 1
     new_df['r_minus'] = pd.to_numeric(new_df['r_minus'].fillna('other'), errors='coerce')
 
+    # prepare the data for the small_iti regressor  
+    for i in range(len(iti_bins)-1):
+        new_df.loc[(new_df['iti_duration'] > iti_bins[i]) & (new_df['iti_duration'] < iti_bins[i+1]), f'iti_bin_{i}'] = 1
+    for i in range(len(iti_bins)-1):
+        new_df[f'iti_bin_{i}'] = new_df.get(f'iti_bin_{i}', 0).fillna(0)
     #create a column where the side matches the regression notaion:
     new_df.loc[new_df['choice'] == 'right', 'choice_num'] = 1
     new_df.loc[new_df['choice'] == 'left', 'choice_num'] = 0
     new_df['choice'] = pd.to_numeric(new_df['choice'].fillna('other'), errors='coerce')
 
-    # build the regressors for previous trials
-    regr_plus = ''
-    regr_minus = ''
+
+    #create the new regressors (product of iti_bins and r_+,r_-)
     for i in range(1, n + 1):
         new_df[f'r_plus_{i}'] = new_df.groupby('session')['r_plus'].shift(i)
         new_df[f'r_minus_{i}'] = new_df.groupby('session')['r_minus'].shift(i)
-        regr_plus += f'r_plus_{i} + '
-        regr_minus += f'r_minus_{i} + '
-    regressors_string = regr_plus + regr_minus + 'iti_duration'
+        for j in range(len(iti_bins)-1):
+            new_df[f'r_plus{i}_iti{j}'] = new_df[f'r_plus_{i}']*new_df[f'iti_bin_{j}']
+            new_df[f'r_minus{i}_iti{j}'] = new_df[f'r_minus_{i}']*new_df[f'iti_bin_{j}']
+
+    for j in range(len(iti_bins)-1):        
+        for i in range(1, n + 1):
+            new_df[f'r_plus{i}_iti{j}'] = new_df.get(f'r_plus{i}_iti{j}', 0).fillna(0)
+            new_df[f'r_minus{i}_iti{j}'] = new_df[f'r_minus_{i}']*new_df[f'iti_bin_{j}']
+    # build the regressors for previous trials
+    regr_plus = ''
+    regr_minus = ''
+    for j in range(len(iti_bins)-1):        
+        for i in range(1, n + 1):
+            regr_plus += f'r_plus{i}_iti{j} + '
+            regr_minus += f'r_minus{i}_iti{j} + '
+    regressors_string = regr_plus + regr_minus[:-3]
 
     return new_df, regressors_string
 
@@ -94,7 +112,6 @@ def plot_GLM(ax, GLM_df, alpha=1):
     legend_handles = [
         mpatches.Patch(color='indianred', label='r+'),
         mpatches.Patch(color='teal', label='r-'),
-        mpatches.Patch(color='black', label='iti')
     ]
 
     # Add legend with custom handles
@@ -105,15 +122,15 @@ def plot_GLM(ax, GLM_df, alpha=1):
     ax.set_ylabel('GLM weight')
     ax.set_xlabel('Previous trials')
 
-def glm():
+def glm(df,iti_bins):
     mice_counter = 0
     f, axes = plt.subplots(1, len(df['subject'].unique()), figsize=(15, 5), sharey=True)
     # iterate over mice
     for mice in df['subject'].unique():
-        print(mice)
         df_mice = df.loc[df['subject'] == mice]
         # fit glm ignoring iti values
-        df_glm_mice, regressors_string = obt_regressors(df=df_mice,n=10)
+        df_glm_mice, regressors_string = obt_regressors(df=df_mice,n=10,iti_bins=iti_bins)
+        print(regressors_string)
         mM_logit = smf.logit(formula='choice_num ~ ' + regressors_string, data=df_glm_mice).fit()
         GLM_df = pd.DataFrame({
             'coefficient': mM_logit.params,
@@ -140,5 +157,4 @@ if __name__ == '__main__':
     df = df[df['task'] != 'S4']
     df = df[df['subject'] != 'manual']
     #select the iti bins
-    glm()
-    plt.show()
+    glm(df,[2,4,6,12,20])

@@ -34,6 +34,7 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     """
     # Select the columns needed for the regressors
     new_df = df[['session', 'outcome', 'side', 'iti_duration']]
+    new_df = new_df.copy()
     new_df['outcome_bool'] = np.where(new_df['outcome'] == "correct", 1, 0)
 
     #A column with the choice of the mice will now be constructed
@@ -104,7 +105,7 @@ def plot_GLM(ax, GLM_df, alpha=1):
     ax.set_ylabel('GLM weight')
     ax.set_xlabel('Previous trials')
 
-def glm():
+def glm(df):
     mice_counter = 0
     f, axes = plt.subplots(1, len(df['subject'].unique()), figsize=(15, 5), sharey=True)
     # iterate over mice
@@ -138,5 +139,4 @@ if __name__ == '__main__':
     # get only trials with iti
     #df = df[df['task'] != 'S4']
     df = df[df['subject'] != 'manual']
-    glm()
-    plt.show()
+    glm(df)

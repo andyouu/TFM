@@ -36,6 +36,7 @@ build/
 
 # If you store data in a folder, for example 'data/', you can ignore the whole folder:
 data/
+plots/
 
 # Optionally, ignore compressed data files (common formats for data storage)
 *.zip

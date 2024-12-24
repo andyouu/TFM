@@ -18,6 +18,10 @@ import os
 import matplotlib.patches as mpatches
 
 
+
+from extra_plotting import *
+
+
 def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     """
     Summary:
@@ -135,12 +139,13 @@ def glm(df,n_bins_iti,iti_bins):
                 'conf_Interval_Low': mM_logit.conf_int()[0],
                 'conf_Interval_High': mM_logit.conf_int()[1]
             })
+            #print(GLM_df['coefficient']['r_plus_1'])
             # alpha = 1 if iti_index == 0 else subtract 0.3 for each iti_index
             alpha = 1 - 0.3 * iti_index
             # subplot title with name of mouse
             axes[mice_counter].set_title(mice)
             plot_GLM(axes[mice_counter], GLM_df, alpha=alpha)
-            #print(GLM_df)
+        psychometric_data(df_glm_mice,GLM_df,regressors_string)
         mice_counter += 1
     plt.show()
 

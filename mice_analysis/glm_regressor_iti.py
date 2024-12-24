@@ -72,13 +72,13 @@ def obt_regressors(df,n,iti_bins) -> Tuple[pd.DataFrame, str]:
         new_df[f'r_plus_{i}'] = new_df.groupby('session')['r_plus'].shift(i)
         new_df[f'r_minus_{i}'] = new_df.groupby('session')['r_minus'].shift(i)
         for j in range(len(iti_bins)-1):
-            new_df[f'r_plus{i}_iti{j}'] = new_df[f'r_plus_{i}']*new_df[f'iti_bin_{j}']
-            new_df[f'r_minus{i}_iti{j}'] = new_df[f'r_minus_{i}']*new_df[f'iti_bin_{j}']
+            new_df[f'r_plus_iti{i}{j}'] = new_df[f'r_plus_{i}']*new_df[f'iti_bin_{j}']
+            new_df[f'r_minus_iti{i}{j}'] = new_df[f'r_minus_{i}']*new_df[f'iti_bin_{j}']
 
     for j in range(len(iti_bins)-1):        
         for i in range(1, n + 1):
-            new_df[f'r_plus{i}_iti{j}'] = new_df.get(f'r_plus{i}_iti{j}', 0).fillna(0)
-            new_df[f'r_minus{i}_iti{j}'] = new_df[f'r_minus_{i}']*new_df[f'iti_bin_{j}']
+            new_df[f'r_plus_iti{i}{j}'] = new_df.get(f'r_plus_iti{i}{j}', 0).fillna(0)
+            new_df[f'r_minus_iti{i}{j}'] = new_df.get(f'r_minus_iti{i}{j}', 0).fillna(0)
     # build the regressors for previous trials
     regr_plus = ''
     regr_minus = ''
@@ -89,8 +89,8 @@ def obt_regressors(df,n,iti_bins) -> Tuple[pd.DataFrame, str]:
     for j in range(len(iti_bins)-1): regressors_string += f'iti_bin_{j} + '
     for j in range(len(iti_bins)-1):        
         for i in range(1, n + 1):
-            regr_plus += f'r_plus{i}_iti{j} + '
-            regr_minus += f'r_minus{i}_iti{j} + '
+            regr_plus += f'r_plus_iti{i}{j} + '
+            regr_minus += f'r_minus_iti{i}{j} + '
     regressors_string += regr_plus + regr_minus[:-3]
 
     return new_df, regressors_string
@@ -109,14 +109,26 @@ def plot_GLM(ax, GLM_df, alpha=1):
     # filter the DataFrame to separate the coefficients
     r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus'), "coefficient"]
     r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus'), "coefficient"]
+    iti_bin = GLM_df.loc[GLM_df.index.str.contains('iti_bin'), "coefficient"]
+    r_minus_iti = GLM_df.loc[GLM_df.index.str.contains('r_minus_iti'), "coefficient"]
+    r_plus_iti = GLM_df.loc[GLM_df.index.str.contains('r_plus_iti'), "coefficient"]
+
     # intercept = GLM_df.loc['Intercept', "coefficient"]
     ax.plot(orders[:len(r_plus)], r_plus, marker='o', color='indianred', alpha=alpha)
     ax.plot(orders[:len(r_minus)], r_minus, marker='o', color='teal', alpha=alpha)
+    ax.plot(orders[:len(iti_bin)], iti_bin, marker='o', color='black', alpha=alpha)
+    ax.plot(orders[:len(r_minus_iti)], r_minus_iti, marker='o', color='green', alpha=alpha)
+    ax.plot(orders[:len(r_plus_iti)], r_plus_iti, marker='o', color='orange', alpha=alpha)
+
 
     # Create custom legend handles with labels and corresponding colors
     legend_handles = [
         mpatches.Patch(color='indianred', label='r+'),
         mpatches.Patch(color='teal', label='r-'),
+        mpatches.Patch(color='cyan', label='iti'),
+        mpatches.Patch(color='green', label='r-_iti'),
+        mpatches.Patch(color='orange', label='r+_iti'),
+
     ]
 
     # Add legend with custom handles
@@ -145,7 +157,7 @@ def glm(df,iti_bins):
             'conf_Interval_Low': mM_logit.conf_int()[0],
             'conf_Interval_High': mM_logit.conf_int()[1]
         })
-        print(mM_logit.params)
+        print(GLM_df['coefficient'])
         # subplot title with name of mouse
         axes[mice_counter].set_title(mice)
         plot_GLM(axes[mice_counter], GLM_df)

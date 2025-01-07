@@ -47,29 +47,29 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'left'), 'choice'] = 'right'
     new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'right'), 'choice'] = 'right'
     new_df['choice'].fillna('other', inplace=True)
+    new_df.loc[new_df['choice'] == 'right', 'choice_num'] = 1
+    new_df.loc[new_df['choice'] == 'left', 'choice_num'] = -1
+    new_df['choice_num'] = pd.to_numeric(new_df['choice_num'].fillna('other'), errors='coerce')
+    new_df['choice_num_+1'] = new_df.groupby('session')['choice'].shift(1)
+    new_df['choice_num_+1'] = pd.to_numeric(new_df['choice_num_+1'].fillna('other'), errors='coerce')
+
+    print(new_df['choice_num'] )
+    print(40*'__')
+    new_df['choice_num_+1'] 
+
+    # prepare the data for the switch regresor switch s_k
+    new_df.loc[(new_df['choice']  != new_df['choice_num_+1']), 'switch'] = 1
+    new_df.loc[(new_df['choice']  == new_df['choice_num_+1']), 'switch'] = 0
+    new_df['switch'] = pd.to_numeric(new_df['switch'].fillna('other'), errors='coerce')
     
-    # prepare the data for the correct_choice regresor L_+
-    new_df.loc[new_df['outcome_bool'] == 0, 'r_plus']  = 0
-    new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'left'), 'r_plus'] = -1
-    new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'right'), 'r_plus'] = 1
-    new_df['r_plus'] = pd.to_numeric(new_df['r_plus'].fillna('other'), errors='coerce')
-    
-    # prepare the data for the wrong_choice regressor L- 
+    # prepare the data for the choice coditioned on outocome regressor r- 
     new_df.loc[new_df['outcome_bool'] == 1, 'r_minus']  = 0
     new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'right'), 'r_minus'] = 1
     new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'left'), 'r_minus'] = -1
     new_df['r_minus'] = pd.to_numeric(new_df['r_minus'].fillna('other'), errors='coerce')
-    print(new_df['outcome_bool'])
-    print(new_df['side'])
-    print(new_df['r_minus'])
-    print(40*'__')
-    
+
     #create a column where the side matches the regression notaion:
-    new_df.loc[new_df['choice'] == 'right', 'choice_num'] = 1
-    new_df.loc[new_df['choice'] == 'left', 'choice_num'] = 0
-    new_df['choice_num'] = pd.to_numeric(new_df['choice_num'].fillna('other'), errors='coerce')
-    print(new_df['choice_num'])
-    print(40*'__')
+    
     
     # build the regressors for previous trials
     regr_plus = ''

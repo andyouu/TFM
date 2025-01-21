@@ -46,14 +46,14 @@ def obt_regressors(df,n,iti_bins) -> Tuple[pd.DataFrame, str]:
     
     # prepare the data for the correct_choice regresor L_+
     new_df.loc[new_df['outcome_bool'] == 0, 'r_plus']  = 0
-    new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'left'), 'r_plus'] = -1
-    new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'right'), 'r_plus'] = 1
+    new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['choice'] == 'left'), 'r_plus'] = -1
+    new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['choice'] == 'right'), 'r_plus'] = 1
     new_df['r_plus'] = pd.to_numeric(new_df['r_plus'].fillna('other'), errors='coerce')
     
     # prepare the data for the wrong_choice regressor L- 
     new_df.loc[new_df['outcome_bool'] == 1, 'r_minus']  = 0
-    new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'left'), 'r_minus'] = -1
-    new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'right'), 'r_minus'] = 1
+    new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['choice'] == 'left'), 'r_minus'] = -1
+    new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['choice'] == 'right'), 'r_minus'] = 1
     new_df['r_minus'] = pd.to_numeric(new_df['r_minus'].fillna('other'), errors='coerce')
     
     # prepare the data for the small_iti regressor  
@@ -69,11 +69,11 @@ def obt_regressors(df,n,iti_bins) -> Tuple[pd.DataFrame, str]:
 
     #create the new regressors (product of iti_bins and r_+,r_-)
     for i in range(1, n + 1):
-        new_df[f'r_plus_{i}'] = new_df.groupby('session')['r_plus'].shift(i)
-        new_df[f'r_minus_{i}'] = new_df.groupby('session')['r_minus'].shift(i)
+        new_df[f'r_plus__{i}'] = new_df.groupby('session')['r_plus'].shift(i)
+        new_df[f'r_minus__{i}'] = new_df.groupby('session')['r_minus'].shift(i)
         for j in range(len(iti_bins)-1):
-            new_df[f'r_plus_iti{i}{j}'] = new_df[f'r_plus_{i}']*new_df[f'iti_bin_{j}']
-            new_df[f'r_minus_iti{i}{j}'] = new_df[f'r_minus_{i}']*new_df[f'iti_bin_{j}']
+            new_df[f'r_plus_iti{i}{j}'] = new_df[f'r_plus__{i}']*new_df[f'iti_bin_{j}']
+            new_df[f'r_minus_iti{i}{j}'] = new_df[f'r_minus__{i}']*new_df[f'iti_bin_{j}']
 
     for j in range(len(iti_bins)-1):        
         for i in range(1, n + 1):
@@ -84,8 +84,8 @@ def obt_regressors(df,n,iti_bins) -> Tuple[pd.DataFrame, str]:
     regr_minus = ''
     regressors_string = ''
     for i in range(1, n + 1):
-        regr_plus += f'r_plus_{i} + '
-        regr_minus += f'r_minus_{i} + '
+        regr_plus += f'r_plus__{i} + '
+        regr_minus += f'r_minus__{i} + '
     for j in range(len(iti_bins)-1): regressors_string += f'iti_bin_{j} + '
     for j in range(len(iti_bins)-1):        
         for i in range(1, n + 1):
@@ -107,66 +107,65 @@ def plot_GLM(ax, GLM_df, alpha=1):
     orders = np.arange(len(GLM_df))
 
     # filter the DataFrame to separate the coefficients
-    r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus'), "coefficient"]
-    r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus'), "coefficient"]
-    iti_bin = GLM_df.loc[GLM_df.index.str.contains('iti_bin'), "coefficient"]
-    r_minus_iti = GLM_df.loc[GLM_df.index.str.contains('r_minus_iti'), "coefficient"]
-    r_plus_iti = GLM_df.loc[GLM_df.index.str.contains('r_plus_iti'), "coefficient"]
+    r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus__'), "coefficient"]
+    r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus__'), "coefficient"]
+    plus_iti_bin_0 = GLM_df.loc[GLM_df.index.str.contains('r_plus_iti[1-5]0'), "coefficient"]
+    plus_iti_bin_1 = GLM_df.loc[GLM_df.index.str.contains('r_plus_iti[1-5]1'), "coefficient"]
+    plus_iti_bin_2 = GLM_df.loc[GLM_df.index.str.contains('r_plus_iti[1-5]2'), "coefficient"]
+    plus_iti_bin_3 = GLM_df.loc[GLM_df.index.str.contains('r_plus_iti[1-5]3'), "coefficient"]
+    minus_iti_bin_0 = GLM_df.loc[GLM_df.index.str.contains('r_minus_iti[1-5]0'), "coefficient"]
+    minus_iti_bin_1 = GLM_df.loc[GLM_df.index.str.contains('r_minus_iti[1-5]1'), "coefficient"]
+    minus_iti_bin_2 = GLM_df.loc[GLM_df.index.str.contains('r_minus_iti[1-5]2'), "coefficient"]
+    minus_iti_bin_3 = GLM_df.loc[GLM_df.index.str.contains('r_minus_iti[1-5]3'), "coefficient"]
 
+    print(40*'_')
     # intercept = GLM_df.loc['Intercept', "coefficient"]
     ax.plot(orders[:len(r_plus)], r_plus, marker='o', color='indianred', alpha=alpha)
     ax.plot(orders[:len(r_minus)], r_minus, marker='o', color='teal', alpha=alpha)
-    ax.plot(orders[:len(iti_bin)], iti_bin, marker='o', color='black', alpha=alpha)
-    ax.plot(orders[:len(r_minus_iti)], r_minus_iti, marker='o', color='green', alpha=alpha)
-    ax.plot(orders[:len(r_plus_iti)], r_plus_iti, marker='o', color='orange', alpha=alpha)
+    ax.plot(orders[:len(plus_iti_bin_0)], plus_iti_bin_0, marker='o', color='orange', alpha=alpha-0)
+    ax.plot(orders[:len(plus_iti_bin_1)], plus_iti_bin_0, marker='o', color='orange', alpha=alpha-0.3)
+    ax.plot(orders[:len(plus_iti_bin_2)], plus_iti_bin_1, marker='o', color='orange', alpha=alpha-0.6)
+    ax.plot(orders[:len(plus_iti_bin_3)], plus_iti_bin_3, marker='o', color='orange', alpha=alpha-0.8)
+    ax.plot(orders[:len(minus_iti_bin_0)], minus_iti_bin_0, marker='o', color='green', alpha=alpha-0)
+    ax.plot(orders[:len(minus_iti_bin_1)], minus_iti_bin_0, marker='o', color='green', alpha=alpha-0.3)
+    ax.plot(orders[:len(minus_iti_bin_2)], minus_iti_bin_1, marker='o', color='green', alpha=alpha-0.6)
+    ax.plot(orders[:len(minus_iti_bin_3)], minus_iti_bin_3, marker='o', color='green', alpha=alpha-0.8)
 
 
-    # Create custom legend handles with labels and corresponding colors
-    legend_handles = [
-        mpatches.Patch(color='indianred', label='r+'),
-        mpatches.Patch(color='teal', label='r-'),
-        mpatches.Patch(color='cyan', label='iti'),
-        mpatches.Patch(color='green', label='r-_iti'),
-        mpatches.Patch(color='orange', label='r+_iti'),
 
-    ]
 
-    # Add legend with custom handles
-    ax.legend(handles=legend_handles)
-    # ax.axhline(y=intercept, label='Intercept', color='black')
-    ax.axhline(y=0, color='gray', linestyle='--')
+    # Show the plot
 
-    ax.set_ylabel('GLM weight')
-    ax.set_xlabel('Previous trials')
 
 def glm(df,iti_bins):
     mice_counter = 0
     f, axes = plt.subplots(1, len(df['subject'].unique()), figsize=(15, 5), sharey=True)
     # iterate over mice
     for mice in df['subject'].unique():
-        df_mice = df.loc[df['subject'] == mice]
-        # fit glm ignoring iti values
-        df_glm_mice, regressors_string = obt_regressors(df=df_mice,n=5,iti_bins=iti_bins)
-        print(regressors_string)
-        mM_logit = smf.logit(formula='choice_num ~ ' + regressors_string, data=df_glm_mice).fit()
-        GLM_df = pd.DataFrame({
-            'coefficient': mM_logit.params,
-            'std_err': mM_logit.bse,
-            'z_value': mM_logit.tvalues,
-            'p_value': mM_logit.pvalues,
-            'conf_Interval_Low': mM_logit.conf_int()[0],
-            'conf_Interval_High': mM_logit.conf_int()[1]
-        })
-        print(GLM_df['coefficient'])
-        # subplot title with name of mouse
-        axes[mice_counter].set_title(mice)
-        plot_GLM(axes[mice_counter], GLM_df)
-        mice_counter += 1
+        if mice != 'A10':
+            df_mice = df.loc[df['subject'] == mice]
+            # fit glm ignoring iti values
+            df_glm_mice, regressors_string = obt_regressors(df=df_mice,n=5,iti_bins=iti_bins)
+            print(regressors_string)
+            mM_logit = smf.logit(formula='choice_num ~ ' + regressors_string, data=df_glm_mice).fit()
+            GLM_df = pd.DataFrame({
+                'coefficient': mM_logit.params,
+                'std_err': mM_logit.bse,
+                'z_value': mM_logit.tvalues,
+                'p_value': mM_logit.pvalues,
+                'conf_Interval_Low': mM_logit.conf_int()[0],
+                'conf_Interval_High': mM_logit.conf_int()[1]
+            })
+            print(GLM_df['coefficient'])
+            # subplot title with name of mouse
+            axes[mice_counter].set_title(mice)
+            plot_GLM(axes[mice_counter],GLM_df)
+            mice_counter += 1
     plt.show()
 
 
 if __name__ == '__main__':
-    data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/global_trials.csv'
+    data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/global_trials_maybe_updated.csv'
     df = pd.read_csv(data_path, sep=';', low_memory=False, dtype={'iti_duration': float})
     # shift iti_duration to the next trial
     df['iti_duration'] = df['iti_duration'].shift(1)

@@ -1,0 +1,79 @@
+import pandas as pd
+import numpy as np
+from typing import Tuple
+from datetime import timedelta
+import matplotlib
+matplotlib.use('TkAgg') 
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+import seaborn as sns
+import matplotlib.ticker as ticker
+from scipy import stats
+from scipy.special import erf
+from scipy.optimize import curve_fit
+from matplotlib.backends.backend_pdf import PdfPages
+import matplotlib.dates as mdates
+import statsmodels.formula.api as smf
+import os
+import matplotlib.patches as mpatches
+
+
+def probit(x, beta, alpha):
+        """
+        Return probit function with parameters alpha and beta.
+
+        Parameters
+        ----------
+        x : float
+            independent variable.
+        beta : float
+            sensitivity term. Sensitivity term corresponds to the slope of the psychometric curve.
+        alpha : TYPE
+            bias term. Bias term corresponds to the shift of the psychometric curve along the x-axis.
+
+        Returns
+        -------
+        probit : float
+            probit value for the given x, beta and alpha.
+
+        """
+        probit = 1/2*(1+erf((beta*x+alpha)/np.sqrt(2)))
+        return probit
+
+def psychometric_fit(ax,df_glm_mice):
+    #plt.hist(df_glm_mice, bins=30, edgecolor='black')  # 30 bins for the histogram
+    #plt.title('Histogram of the df_glm_mice in 100 bins')
+    #plt.xlabel('Trial bins')
+    #plt.ylabel('log(Odds)')
+    #plt.show()
+    #print(df_glm_mice)
+    n_bins = 50
+    bins = np.linspace(df_glm_mice['evidence'].min(), df_glm_mice['evidence'].max(), n_bins)
+    df_glm_mice['binned_ev'] = pd.cut(df_glm_mice['evidence'], bins=bins)
+    grouped = df_glm_mice.groupby('binned_ev').agg(
+    ev_mean=('evidence', 'mean'),
+    outcome_mean=('outcome_bool', 'mean')
+    ).dropna() 
+    ev_means = grouped['ev_mean'].values
+    outcome_means = grouped['outcome_mean'].values
+    print(ev_means)
+    print(outcome_means)
+    [beta, alpha],_ = curve_fit(probit, ev_means, outcome_means, p0=[0, 1])
+    print(beta)
+    print(alpha)
+    ax.plot(ev_means, probit(ev_means, beta,alpha), marker='o', color='grey')
+    #plt.show()
+
+
+
+def psychometric_data(ax,df_glm_mice, GLM_df,regressors_string):
+    #we will first compute the evidence:
+    regressors_vect = regressors_string.split(' + ')
+    coefficients = GLM_df['coefficient']
+    n = len(df_glm_mice['r_plus_1'])
+    df_glm_mice['evidence'] = 0
+    for j in range(len(regressors_vect)):
+        df_glm_mice['evidence']+= coefficients[regressors_vect[j]]*df_glm_mice[regressors_vect[j]]
+    psychometric_fit(ax,df_glm_mice)
+    
+

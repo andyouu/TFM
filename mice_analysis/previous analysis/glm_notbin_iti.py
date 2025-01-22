@@ -53,7 +53,7 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
         regressors_string([string]) :  [regressioon formula]
     """
     # Select the columns needed for the regressors
-    new_df = df[['session', 'outcome', 'side', 'iti_duration']]
+    new_df = df[['session', 'outcome', 'side', 'iti_duration','probability_r']]
     new_df = new_df.copy()
     new_df['outcome_bool'] = np.where(new_df['outcome'] == "correct", 1, 0)
     #A column indicating significant columns will be constructed

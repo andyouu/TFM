@@ -48,10 +48,10 @@ def psychometric_fit(ax,df_glm_mice):
     #plt.show()
     #print(df_glm_mice)
     n_bins = 5000
-    bins = np.linspace(df_glm_mice['evidence'].min(), df_glm_mice['evidence'].max(), n_bins)
-    df_glm_mice['binned_ev'] = pd.cut(df_glm_mice['evidence'], bins=bins)
+    bins = np.linspace(df_glm_mice['V_t'].min(), df_glm_mice['V_t'].max(), n_bins)
+    df_glm_mice['binned_ev'] = pd.cut(df_glm_mice['V_t'], bins=bins)
     grouped = df_glm_mice.groupby('binned_ev').agg(
-    ev_mean=('evidence', 'mean'),
+    ev_mean=('V_t', 'mean'),
     p_right_mean=('probability_r', 'mean')
     ).dropna() 
     ev_means = grouped['ev_mean'].values

@@ -64,7 +64,14 @@ def psychometric_fit(ax,df_glm_mice):
     ax.plot(ev_means, probit(ev_means, beta,alpha), marker='o', color='grey')
     #plt.show()
 
+def psychometric(x):
+    y = np.exp(x)
+    return 1/(1 + y)
 
+def psychometric_plot(ax,df_glm_mice):
+    n_bins = 5000
+    bins = np.linspace(df_glm_mice['V_t'].min(), df_glm_mice['V_t'].max(), n_bins)
+    df_glm_mice['binned_ev'] = pd.cut(df_glm_mice['V_t'], bins=bins)
 
 def psychometric_data(ax,df_glm_mice, GLM_df,regressors_string):
     #we will first compute the evidence:

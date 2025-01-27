@@ -39,8 +39,11 @@ def compute_values(df,prob_switch,prob_rwd) -> Tuple[pd.DataFrame, str]:
     df.loc[0, 'V_t'] = prob_rwd * (0.7 - 0.3)
 
     df.loc[0, 'R_t'] = 0
-    rho = 1 / (1 - prob_rwd) / (1 - prob_switch)
+
     for i in range(len(df) - 1):
+        # Comment the following two lines if we are considering a constant probability of switching
+        #if (df.loc[i+1,'side'] == 'right'): prob_switch = df.loc[i+1,'probability_r']
+        #if (df.loc[i+1,'side'] == 'left'): prob_switch = 1 - df.loc[i+1,'probability_r']
         if df.loc[i+1, 'outcome_bool'] == 1:
             df.loc[i + 1, 'R_t'] = 0
         if df.loc[i+1, 'outcome_bool'] == 0:
@@ -54,8 +57,19 @@ def compute_values(df,prob_switch,prob_rwd) -> Tuple[pd.DataFrame, str]:
             
         if df.loc[i + 1, 'side'] == 'left':
             df.loc[i + 1, 'V_t'] = prob_rwd * (1 - 2 / (df.loc[i + 1, 'R_t'] + 1))
-    print(df['V_t'])
-    print(df['R_t'])
+    #print(df['V_t'])
+    #print(df['R_t'])
+    #A column with the choice of the mice will now be constructed
+    df.loc[(df['outcome_bool'] == 0) & (df['side'] == 'right'), 'choice'] = 'left'
+    df.loc[(df['outcome_bool'] == 1) & (df['side'] == 'left'), 'choice'] = 'left'
+    df.loc[(df['outcome_bool'] == 0) & (df['side'] == 'left'), 'choice'] = 'right'
+    df.loc[(df['outcome_bool'] == 1) & (df['side'] == 'right'), 'choice'] = 'right'
+    df['choice'].fillna('other', inplace=True)
+
+    #create a column where the side matches the regression notaion:
+    df.loc[df['choice'] == 'right', 'choice_num'] = 1
+    df.loc[df['choice'] == 'left', 'choice_num'] = 0
+    df['choice'] = pd.to_numeric(df['choice'].fillna('other'), errors='coerce')
     return df
 
 
@@ -77,8 +91,7 @@ def inference_plot(prob_switch,prob_rwd,df):
             axes[mice_counter].set_title(mice)
             psychometric_fit(axes[mice_counter],df_values)
             mice_counter += 1
-    plt.show
-    print(40*'-')
+    plt.show()
 
 if __name__ == '__main__':
     data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/global_trials_maybe_updated.csv'
@@ -88,10 +101,10 @@ if __name__ == '__main__':
     # get only trials with iti
     #df = df[df['task'] != 'S4']
     df = df[df['subject'] != 'manual']
-    prob_rwd = 0.9
-    prob_switch = 0.3
+    prob_rwd = 0.99
+    prob_switch = 0.5
     new_df = df[['subject','session', 'outcome', 'side', 'iti_duration','probability_r']]
     new_df = new_df.copy()
     new_df['outcome_bool'] = np.where(new_df['outcome'] == "correct", 1, 0)
-    #A column indicating significant columns will be constructed
+
     inference_plot(prob_switch,prob_rwd,new_df)

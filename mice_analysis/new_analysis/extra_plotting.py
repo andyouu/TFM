@@ -37,41 +37,80 @@ def probit(x, beta, alpha):
             probit value for the given x, beta and alpha.
 
         """
-        probit = 1/2*(1+erf((beta*x+alpha)/np.sqrt(2)))
-        return probit
+        y = np.exp(-beta * x + alpha)
+        return 1/(1 + y)
+
+
+def psychometric(x):
+    y = np.exp(-x)
+    return 1/(1 + y)
 
 def psychometric_fit(ax,df_glm_mice):
-    #plt.hist(df_glm_mice, bins=30, edgecolor='black')  # 30 bins for the histogram
-    #plt.title('Histogram of the df_glm_mice in 100 bins')
-    #plt.xlabel('Trial bins')
-    #plt.ylabel('log(Odds)')
+    n_bins = 20
+    df_glm_mice['binned_ev'] = pd.qcut(df_glm_mice['V_t'], n_bins,duplicates='drop')
+    #bin_counts = df_glm_mice['binned_ev'].value_counts().sort_index()
+    #plt.figure(figsize=(10, 6))
+    #bin_counts.plot(kind='bar', width=0.8, color='skyblue', edgecolor='black')
+    #plt.title('Histogram of Elements in Each Bin', fontsize=16)
+    #plt.xlabel('Bin Interval', fontsize=14)
+    #plt.ylabel('Number of Elements', fontsize=14)
+    #plt.xticks(rotation=45, ha='right')
+    #plt.tight_layout()
     #plt.show()
-    #print(df_glm_mice)
-    n_bins = 5000
-    bins = np.linspace(df_glm_mice['V_t'].min(), df_glm_mice['V_t'].max(), n_bins)
-    df_glm_mice['binned_ev'] = pd.cut(df_glm_mice['V_t'], bins=bins)
+
     grouped = df_glm_mice.groupby('binned_ev').agg(
     ev_mean=('V_t', 'mean'),
-    p_right_mean=('probability_r', 'mean')
+    p_right_mean=('choice_num', 'mean')
     ).dropna() 
     ev_means = grouped['ev_mean'].values
     p_right_mean = grouped['p_right_mean'].values
-    print(ev_means)
     print(p_right_mean)
+    ev_means = grouped['ev_mean'].values
+    p_right_mean = grouped['p_right_mean'].values
+    #print(ev_means)
+    #print(p_right_mean)
     [beta, alpha],_ = curve_fit(probit, ev_means, p_right_mean, p0=[0, 1])
     print(beta)
     print(alpha)
     ax.plot(ev_means, probit(ev_means, beta,alpha), marker='o', color='grey')
-    #plt.show()
+    ax.plot(ev_means, psychometric(ev_means), marker='o', color='grey', alpha = 0.5)
+    ax.plot(ev_means, p_right_mean, marker = 'o', color = 'black')
 
-def psychometric(x):
-    y = np.exp(x)
-    return 1/(1 + y)
+
 
 def psychometric_plot(ax,df_glm_mice):
-    n_bins = 5000
+    n_bins = 20
     bins = np.linspace(df_glm_mice['V_t'].min(), df_glm_mice['V_t'].max(), n_bins)
     df_glm_mice['binned_ev'] = pd.cut(df_glm_mice['V_t'], bins=bins)
+    print('Bins')
+    print(40*'_')
+
+    # Print the bin intervals themselves
+    #for bin_interval in pd.cut(df_glm_mice['V_t'], bins=bins).cat.categories:
+    #    print(bin_interval)
+    #    filtered_df = df_glm_mice[df_glm_mice['binned_ev'] == bin_interval]
+    #
+        # Print choice_num and V_t for the current bin
+    #    print("choice_num:")
+    #    print(filtered_df['choice_num'])
+    #    print("V_t:")
+    #    print(filtered_df['V_t'])
+    #    print(40*'=')
+
+    #print(40*'_')    
+
+    grouped = df_glm_mice.groupby('binned_ev').agg(
+    ev_mean=('V_t', 'mean'),
+    p_right_mean=('choice_num', 'mean')
+    ).dropna() 
+    ev_means = grouped['ev_mean'].values
+    p_right_mean = grouped['p_right_mean'].values
+    #print(ev_means)
+    print(p_right_mean)
+    ax.plot(ev_means,psychometric(ev_means), marker = 'o', color = 'grey')
+    ax.plot(ev_means, p_right_mean, marker = 'o', color = 'black')
+
+
 
 def psychometric_data(ax,df_glm_mice, GLM_df,regressors_string):
     #we will first compute the evidence:
@@ -80,7 +119,8 @@ def psychometric_data(ax,df_glm_mice, GLM_df,regressors_string):
     n = len(df_glm_mice['r_plus_1'])
     df_glm_mice['evidence'] = 0
     for j in range(len(regressors_vect)):
-        df_glm_mice['evidence']+= coefficients[regressors_vect[j]]*df_glm_mice[regressors_vect[j]]
-    psychometric_fit(ax,df_glm_mice)
+        df_glm_mice['V_t']+= coefficients[regressors_vect[j]]*df_glm_mice[regressors_vect[j]]
+    #psychometric_fit(ax,df_glm_mice)
+    psychometric_plot(ax,df_glm_mice)
     
 

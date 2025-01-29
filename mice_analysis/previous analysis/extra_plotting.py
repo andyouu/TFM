@@ -72,16 +72,21 @@ def psychometric_plot(ax,df_glm_mice):
     n_bins = 100
     bins = np.linspace(df_glm_mice['evidence'].min(), df_glm_mice['evidence'].max(), n_bins)
     df_glm_mice['binned_ev'] = pd.cut(df_glm_mice['evidence'], bins=bins)
-    print(df_glm_mice['choice_num'])
+    #print(df_glm_mice['choice_num'])
+
+    #grouped = df_glm_mice.groupby('binned_ev').agg(
+    #ev_mean=('evidence', 'mean'),
+    #p_right_mean=('choice_num', 'mean')
+    #).dropna() 
     grouped = df_glm_mice.groupby('binned_ev').agg(
     ev_mean=('evidence', 'mean'),
-    p_right_mean=('choice_num', 'mean')
-    ).dropna() 
+    p_right_mean=('switch_num', 'mean')
+    ).dropna()
     ev_means = grouped['ev_mean'].values
     p_right_mean = grouped['p_right_mean'].values
     print(ev_means)
     print(p_right_mean)
-    ax.plot(ev_means,psychometric(ev_means), marker = 'o', color = 'grey')
+    ax.plot(ev_means,psychometric(ev_means), color = 'grey')
     ax.plot(ev_means, p_right_mean, marker = 'o', color = 'black')
 
 
@@ -90,7 +95,6 @@ def psychometric_data(ax,df_glm_mice, GLM_df,regressors_string):
     #we will first compute the evidence:
     regressors_vect = regressors_string.split(' + ')
     coefficients = GLM_df['coefficient']
-    n = len(df_glm_mice['r_plus_1'])
     df_glm_mice['evidence'] = 0
     for j in range(len(regressors_vect)):
         df_glm_mice['evidence']+= coefficients[regressors_vect[j]]*df_glm_mice[regressors_vect[j]]

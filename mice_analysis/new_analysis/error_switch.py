@@ -22,6 +22,11 @@ from extra_plotting import *
 
 
 
+
+
+
+
+
 if __name__ == '__main__':
     data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/global_trials_maybe_updated.csv'
     df = pd.read_csv(data_path, sep=';', low_memory=False, dtype={'iti_duration': float})

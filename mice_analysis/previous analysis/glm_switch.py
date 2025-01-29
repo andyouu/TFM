@@ -1,3 +1,4 @@
+
 import pandas as pd
 import numpy as np
 from typing import Tuple
@@ -17,7 +18,6 @@ import statsmodels.formula.api as smf
 import os
 import matplotlib.patches as mpatches
 from extra_plotting import *
-
 
 
 def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
@@ -63,19 +63,31 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['choice'] == 'right'), 'r_minus'] = 1
     new_df['r_minus'] = pd.to_numeric(new_df['r_minus'].fillna('other'), errors='coerce')
 
-    #create a column where the side matches the regression notaion:
-    new_df.loc[new_df['choice'] == 'right', 'choice_num'] = 1
-    new_df.loc[new_df['choice'] == 'left', 'choice_num'] = 0
-    new_df['choice'] = pd.to_numeric(new_df['choice'].fillna('other'), errors='coerce')
+    #prepare the switch regressor
+    new_df['choice_1'] = new_df.groupby('session')['choice'].shift(1)
+    new_df.loc[(new_df['choice'] == new_df['choice_1']), 'switch_num'] = 0
+    new_df.loc[(new_df['choice'] != new_df['choice_1']), 'switch_num'] = 1
 
     # build the regressors for previous trials
     regr_plus = ''
     regr_minus = ''
-    for i in range(1, n + 1):
-        new_df[f'r_plus_{i}'] = new_df.groupby('session')['r_plus'].shift(i)
-        new_df[f'r_minus_{i}'] = new_df.groupby('session')['r_minus'].shift(i)
-        regr_plus += f'r_plus_{i} + '
-        regr_minus += f'r_minus_{i} + '
+    for i in range(2, n + 1):
+        new_df[f'choice_{i}'] = new_df.groupby('session')['choice'].shift(i)
+        
+        #prepare the data for the error_switch regressor rss_-
+        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool'] == 0), f'rss_minus{i}'] = 1
+        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool'] == 1), f'rss_minus{i}'] = 0
+        new_df.loc[new_df[f'choice_{i}'] != new_df['choice_1'], f'rss_minus{i}'] = 0
+        new_df[f'rss_minus{i}'] = pd.to_numeric(new_df[f'rss_minus{i}'].fillna('other'), errors='coerce')
+
+        #prepare the data for the error_switch regressor rss_-
+        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool'] == 1), f'rss_plus{i}'] = 1
+        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool'] == 0), f'rss_plus{i}'] = 0
+        new_df.loc[new_df[f'choice_{i}'] != new_df['choice_1'], f'rss_plus{i}'] = 0
+        new_df[f'rss_plus{i}'] = pd.to_numeric(new_df[f'rss_plus{i}'].fillna('other'), errors='coerce')
+        regr_plus += f'rss_plus{i} + '
+        regr_minus += f'rss_minus{i} + '
+        print(new_df[f'rss_plus{i}'])
     regressors_string = regr_plus + regr_minus[:-3]
 
     return new_df, regressors_string
@@ -92,8 +104,8 @@ def plot_GLM(ax, GLM_df, alpha=1):
     orders = np.arange(len(GLM_df))
 
     # filter the DataFrame to separate the coefficients
-    r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus'), "coefficient"]
-    r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus'), "coefficient"]
+    r_plus = GLM_df.loc[GLM_df.index.str.contains('rss_plus'), "coefficient"]
+    r_minus = GLM_df.loc[GLM_df.index.str.contains('rss_minus'), "coefficient"]
     # intercept = GLM_df.loc['Intercept', "coefficient"]
     ax.plot(orders[:len(r_plus)], r_plus, marker='o', color='indianred', alpha=alpha)
     ax.plot(orders[:len(r_minus)], r_minus, marker='o', color='teal', alpha=alpha)
@@ -124,8 +136,8 @@ def glm(df):
             # fit glm ignoring iti values
             #df_mice['iti_bins'] = pd.cut(df_mice['iti_duration'], iti_bins)
             print(df_mice['subject'])
-            df_glm_mice, regressors_string = obt_regressors(df=df_mice,n=10)
-            mM_logit = smf.logit(formula='choice_num ~ ' + regressors_string, data=df_glm_mice).fit()
+            df_glm_mice, regressors_string = obt_regressors(df=df_mice,n=5)
+            mM_logit = smf.logit(formula='switch_num ~ ' + regressors_string, data=df_glm_mice).fit()
             GLM_df = pd.DataFrame({
                 'coefficient': mM_logit.params,
                 'std_err': mM_logit.bse,
@@ -141,7 +153,6 @@ def glm(df):
             mice_counter += 1
             psychometric_data(axes1[mice_counter],df_glm_mice,GLM_df,regressors_string)
     plt.show()
-
 
 if __name__ == '__main__':
     data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/global_trials_maybe_updated.csv'

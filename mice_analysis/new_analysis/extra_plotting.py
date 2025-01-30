@@ -72,8 +72,8 @@ def psychometric_fit(ax,df_glm_mice):
     [beta, alpha],_ = curve_fit(probit, ev_means, p_right_mean, p0=[0, 1])
     print(beta)
     print(alpha)
-    ax.plot(ev_means, probit(ev_means, beta,alpha), marker='o', color='grey')
-    ax.plot(ev_means, psychometric(ev_means), marker='o', color='grey', alpha = 0.5)
+    ax.plot(ev_means, probit(ev_means, beta,alpha), color='grey')
+    ax.plot(ev_means, psychometric(ev_means), color='grey', alpha = 0.5)
     ax.plot(ev_means, p_right_mean, marker = 'o', color = 'black')
 
 
@@ -82,8 +82,6 @@ def psychometric_plot(ax,df_glm_mice):
     n_bins = 20
     bins = np.linspace(df_glm_mice['V_t'].min(), df_glm_mice['V_t'].max(), n_bins)
     df_glm_mice['binned_ev'] = pd.cut(df_glm_mice['V_t'], bins=bins)
-    print('Bins')
-    print(40*'_')
 
     # Print the bin intervals themselves
     #for bin_interval in pd.cut(df_glm_mice['V_t'], bins=bins).cat.categories:
@@ -107,7 +105,7 @@ def psychometric_plot(ax,df_glm_mice):
     p_right_mean = grouped['p_right_mean'].values
     #print(ev_means)
     print(p_right_mean)
-    ax.plot(ev_means,psychometric(ev_means), marker = 'o', color = 'grey')
+    ax.plot(ev_means,psychometric(ev_means), color = 'grey')
     ax.plot(ev_means, p_right_mean, marker = 'o', color = 'black')
 
 

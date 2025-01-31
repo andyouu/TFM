@@ -43,23 +43,28 @@ def select_train_sessions(df):
     print(df_20)
     return df_80,df_20
 
-def avaluation(df_20):
+def avaluation(df_20,df_80):
     n_bins = 20
-    df_20['binned_ev'] = pd.qcut(df_20['V_t'], n_bins,duplicates='drop')
-    grouped = df_20.groupby('binned_ev').agg(
+    df_80['binned_ev'] = pd.qcut(df_80['V_t'], n_bins,duplicates='drop')
+    grouped = df_80.groupby('binned_ev').agg(
     ev_mean=('V_t', 'mean'),
     p_right_mean=('choice_num', 'mean')
     ).dropna() 
     ev_means = grouped['ev_mean'].values
     p_right_mean = grouped['p_right_mean'].values
-    ev_means = grouped['ev_mean'].values
-    p_right_mean = grouped['p_right_mean'].values
     [beta, alpha],_ = curve_fit(probit, ev_means, p_right_mean, p0=[0, 1])
-    bin_sizes = df_20['binned_ev'].value_counts(sort=False)
+    df_20['binned_ev_20'] = pd.qcut(df_20['V_t'], n_bins,duplicates='drop')
+    grouped_20 = df_20.groupby('binned_ev_20').agg(
+    ev_mean_20 =('V_t', 'mean'),
+    p_right_mean_20=('choice_num', 'mean')
+    ).dropna() 
+    ev_means_20 = grouped_20['ev_mean_20'].values
+    p_right_mean_20 = grouped_20['p_right_mean_20'].values
+    bin_sizes = df_20['binned_ev_20'].value_counts(sort=False)
     print(bin_sizes)
     weights = bin_sizes / np.sum(bin_sizes)  # Normalize weights to sum to 1
-    predicted_p_right = probit(ev_means, beta,alpha)
-    wmse = np.sum(weights * (p_right_mean - predicted_p_right) ** 2)    
+    predicted_p_right = probit(ev_means_20, beta,alpha)
+    wmse = np.sum(weights * (p_right_mean_20 - predicted_p_right) ** 2)    
     print(wmse)
     return wmse
 
@@ -78,7 +83,7 @@ def inference_plot(prob_switch,prob_rwd,df):
             df_80, df_20 = select_train_sessions(df_values)
             df_values = compute_values(df_80,  prob_switch, prob_rwd)
             mice_counter += 1
-            errors[mice_counter]  = avaluation(df_20)
+            errors[mice_counter]  = avaluation(df_20,df_80)
     plt.plot(range(0, len(df['subject'].unique())), errors, marker='o')
     plt.xticks(range(0, len(df['subject'].unique())), df['subject'].unique())
     plt.xlabel('Mice')

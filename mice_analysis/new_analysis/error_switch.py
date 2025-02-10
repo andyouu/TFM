@@ -56,7 +56,7 @@ def number_fails_plot(df, n):
 
 
 def prob_switch(df, n):
-    count = np.zeros((n, 3))  # [total_occurrences, switches, probability]
+    count = np.zeros((n, 3))
 
     i = 0
     while i < len(df) - 1:
@@ -71,19 +71,37 @@ def prob_switch(df, n):
                     count[j][1] += 1
 
         i += max(j, 1)
-
-
+    probabilities = []
+    std_errors = []
     for k in range(n):
         if count[k][0] > 0:
-            count[k][2] = count[k][1] / count[k][0]
+            p = count[k][1] / count[k][0]
+            probabilities.append(p)
+            std_errors.append(np.sqrt(p * (1 - p) / count[k][0]))
+        else:
+            probabilities.append(np.nan)
+            std_errors.append(np.nan)
 
-    # Plot results
-    plt.plot(range(1, n + 1), count[:, 2], marker='o')
+    # Probability of switching with error bars
+    plt.figure(figsize=(12, 5))
+
+    plt.subplot(1, 2, 1)
+    plt.errorbar(range(1, n + 1), probabilities, yerr=std_errors, fmt='o-', capsize=5)
     plt.xlabel('Number of Consecutive Failures')
     plt.ylabel('Probability of Switching')
     plt.title('Probability of Switching Given Number of Errors')
     plt.grid(True)
-    plt.show()    
+
+    # PHistogram of cases for each number of errors
+    plt.subplot(1, 2, 2)
+    plt.bar(range(1, n + 1), count[:, 0], color='skyblue')
+    plt.xlabel('Number of Consecutive Failures')
+    plt.ylabel('Number of Cases')
+    plt.title('Histogram of Cases for Each Number of Errors')
+    plt.grid(True)
+
+    plt.tight_layout()
+    plt.show()
 
 
 

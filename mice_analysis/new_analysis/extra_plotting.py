@@ -45,36 +45,40 @@ def psychometric(x):
     y = np.exp(-x)
     return 1/(1 + y)
 
-def psychometric_fit(ax,df_glm_mice):
+def psychometric_fit(ax,data_vec):
     n_bins = 20
-    df_glm_mice['binned_ev'] = pd.qcut(df_glm_mice['V_t'], n_bins,duplicates='drop')
-    #bin_counts = df_glm_mice['binned_ev'].value_counts().sort_index()
-    #plt.figure(figsize=(10, 6))
-    #bin_counts.plot(kind='bar', width=0.8, color='skyblue', edgecolor='black')
-    #plt.title('Histogram of Elements in Each Bin', fontsize=16)
-    #plt.xlabel('Bin Interval', fontsize=14)
-    #plt.ylabel('Number of Elements', fontsize=14)
-    #plt.xticks(rotation=45, ha='right')
-    #plt.tight_layout()
-    #plt.show()
+    phi= 1
+    for df_glm_mice in data_vec:
+        df_glm_mice['binned_ev'] = pd.qcut(df_glm_mice['V_t'], n_bins,duplicates='drop')
+        #bin_counts = df_glm_mice['binned_ev'].value_counts().sort_index()
+        #plt.figure(figsize=(10, 6))
+        #bin_counts.plot(kind='bar', width=0.8, color='skyblue', edgecolor='black')
+        #plt.title('Histogram of Elements in Each Bin', fontsize=16)
+        #plt.xlabel('Bin Interval', fontsize=14)
+        #plt.ylabel('Number of Elements', fontsize=14)
+        #plt.xticks(rotation=45, ha='right')
+        #plt.tight_layout()
+        #plt.show()
 
-    grouped = df_glm_mice.groupby('binned_ev').agg(
-    ev_mean=('V_t', 'mean'),
-    p_right_mean=('choice_num', 'mean')
-    ).dropna() 
-    ev_means = grouped['ev_mean'].values
-    p_right_mean = grouped['p_right_mean'].values
-    print(p_right_mean)
-    ev_means = grouped['ev_mean'].values
-    p_right_mean = grouped['p_right_mean'].values
-    #print(ev_means)
-    #print(p_right_mean)
-    [beta, alpha],_ = curve_fit(probit, ev_means, p_right_mean, p0=[0, 1])
-    print(beta)
-    print(alpha)
-    ax.plot(ev_means, probit(ev_means, beta,alpha), color='grey')
-    ax.plot(ev_means, psychometric(ev_means), color='grey', alpha = 0.5)
-    ax.plot(ev_means, p_right_mean, marker = 'o', color = 'black')
+        grouped = df_glm_mice.groupby('binned_ev').agg(
+        ev_mean=('V_t', 'mean'),
+        p_right_mean=('choice_num', 'mean')
+        ).dropna() 
+        ev_means = grouped['ev_mean'].values
+        p_right_mean = grouped['p_right_mean'].values
+        print(p_right_mean)
+        ev_means = grouped['ev_mean'].values
+        p_right_mean = grouped['p_right_mean'].values
+        #print(ev_means)
+        #print(p_right_mean)
+        [beta, alpha],_ = curve_fit(probit, ev_means, p_right_mean, p0=[0, 1])
+        print(beta)
+        print(alpha)
+        ax.plot(ev_means, probit(ev_means, beta,alpha), color='green',alpha = phi)
+        #ax.plot(ev_means, psychometric(ev_means), color='grey', alpha = 0.5)
+        ax.plot(ev_means, p_right_mean, marker = 'o', color = 'black', alpha = phi)
+        phi -= 0.5
+        print(40*'__')
 
 
 

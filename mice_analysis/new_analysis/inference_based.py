@@ -40,17 +40,16 @@ def compute_values(df,prob_switch,prob_rwd) -> pd.DataFrame:
     df.loc[0, 'V_t'] = prob_rwd * (0.7 - 0.3)
 
     df.loc[0, 'R_t'] = 0
-
+    df.loc[(df['outcome_bool'] == 0) & (df['side'] == 'right'), 'choice'] = 'left'
+    df.loc[(df['outcome_bool'] == 1) & (df['side'] == 'left'), 'choice'] = 'left'
+    df.loc[(df['outcome_bool'] == 0) & (df['side'] == 'left'), 'choice'] = 'right'
+    df.loc[(df['outcome_bool'] == 1) & (df['side'] == 'right'), 'choice'] = 'right'
+    df['choice'].fillna('other', inplace=True)
     for i in range(len(df) - 1):
         # Comment the following two lines if we are considering a constant probability of switching
         #if (df.loc[i+1,'side'] == 'right'): prob_switch = df.loc[i+1,'probability_r']
         #if (df.loc[i+1,'side'] == 'left'): prob_switch = 1 - df.loc[i+1,'probability_r']
         #A column with the choice of the mice will now be constructed
-        df.loc[(df['outcome_bool'] == 0) & (df['side'] == 'right'), 'choice'] = 'left'
-        df.loc[(df['outcome_bool'] == 1) & (df['side'] == 'left'), 'choice'] = 'left'
-        df.loc[(df['outcome_bool'] == 0) & (df['side'] == 'left'), 'choice'] = 'right'
-        df.loc[(df['outcome_bool'] == 1) & (df['side'] == 'right'), 'choice'] = 'right'
-        df['choice'].fillna('other', inplace=True)
         if df.loc[i+1, 'outcome_bool'] == 1:
             df.loc[i + 1, 'R_t'] = 0
         if df.loc[i+1, 'outcome_bool'] == 0:
@@ -60,10 +59,11 @@ def compute_values(df,prob_switch,prob_rwd) -> pd.DataFrame:
                 df.loc[i + 1, 'R_t'] = (1-prob_switch)/(df.loc[i, 'R_t']+prob_switch)/(1-prob_rwd)
 
         if df.loc[i + 1, 'choice'] == 'right':
-            df.loc[i + 1, 'V_t'] = prob_rwd * (1 - 2 / ((1 +1 / df.loc[i + 1, 'R_t']) ))
+            df.loc[i + 1, 'V_t'] = prob_rwd * (1 - 2 *(df.loc[i + 1, 'R_t']) / (1 + df.loc[i + 1, 'R_t'])) 
             
         if df.loc[i + 1, 'choice'] == 'left':
             df.loc[i + 1, 'V_t'] = prob_rwd * (1 - 2 / (df.loc[i + 1, 'R_t'] + 1))
+
     print(df['V_t'])
     #print(df['R_t'])
 
@@ -161,11 +161,11 @@ def inference_plot(prob_switch,prob_rwd,df):
             #print(new_df_mice)
             #print(new_df_mice['subject'])
             print(mice)
-            df_values = compute_values(new_df_mice,  prob_switch, prob_rwd)
+            #df_values = compute_values(new_df_mice,  prob_switch, prob_rwd)
             #df_values_new = compute_values_manually(new_df_mice,  prob_switch, prob_rwd)
-            #df_values_new = manual_computation(new_df_mice,  prob_switch, prob_rwd,n_back=3)
+            df_values_new = manual_computation(new_df_mice,  prob_switch, prob_rwd,n_back=5)
             axes[mice_counter].set_title(mice)
-            psychometric_fit(axes[mice_counter],[df_values])
+            psychometric_fit(axes[mice_counter],[df_values_new])
             mice_counter += 1
     plt.show()
 

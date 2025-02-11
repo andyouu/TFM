@@ -18,6 +18,7 @@ import statsmodels.formula.api as smf
 import os
 import matplotlib.patches as mpatches
 from extra_plotting import *
+from model_avaluation import *
 
 
 def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
@@ -126,8 +127,10 @@ def plot_GLM(ax, GLM_df, alpha=1):
 
 def glm(df):
     mice_counter = 0
-    f, axes = plt.subplots(1, len(df['subject'].unique()), figsize=(15, 5), sharey=True)
-    f1, axes1 = plt.subplots(1, len(df['subject'].unique()), figsize=(15, 5), sharey=True)
+    n_subjects = len(df['subject'].unique())
+    n_cols = int(np.ceil(n_subjects / 2))
+    f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
+    f1, axes1 = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
     # iterate over mice
     for mice in df['subject'].unique():
         if mice != 'A10':
@@ -135,9 +138,10 @@ def glm(df):
             df_mice = df.loc[df['subject'] == mice]
             # fit glm ignoring iti values
             #df_mice['iti_bins'] = pd.cut(df_mice['iti_duration'], iti_bins)
-            print(df_mice['subject'])
-            df_glm_mice, regressors_string = obt_regressors(df=df_mice,n=5)
-            mM_logit = smf.logit(formula='switch_num ~ ' + regressors_string, data=df_glm_mice).fit()
+            #print(df_mice['subject'])
+            df_glm_mice, regressors_string = obt_regressors(df=df_mice,n=10)
+            df_80, df_20 = select_train_sessions(df_glm_mice)
+            mM_logit = smf.logit(formula='switch_num ~ ' + regressors_string, data=df_80).fit()
             GLM_df = pd.DataFrame({
                 'coefficient': mM_logit.params,
                 'std_err': mM_logit.bse,
@@ -147,11 +151,18 @@ def glm(df):
                 'conf_Interval_High': mM_logit.conf_int()[1]
             })
             # subplot title with name of mouse
-            axes[mice_counter].set_title(mice)
-            axes1[mice_counter].set_title(mice)
-            plot_GLM(axes[mice_counter], GLM_df)
+            ax = axes[mice_counter//n_cols, mice_counter%n_cols]
+            ax1 = axes1[mice_counter//n_cols, mice_counter%n_cols]
+
+            ax.set_title(f'GLM weights: {mice}')
+            ax1.set_title(f'Psychometric Function: {mice}')
+            plot_GLM(ax, GLM_df)
+            psychometric_data(ax1, df_20, GLM_df, regressors_string,'switch_num')
+            ax1.set_xlabel('Evidence')
+            ax1.set_ylabel('Prob of switching')
+            ax1.legend(loc='upper left')
             mice_counter += 1
-            psychometric_data(axes1[mice_counter],df_glm_mice,GLM_df,regressors_string)
+    plt.tight_layout()
     plt.show()
 
 if __name__ == '__main__':

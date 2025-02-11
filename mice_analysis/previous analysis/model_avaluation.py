@@ -98,10 +98,10 @@ def select_train_sessions(df):
     df_20 = df[df['session'].isin(sessions_20)]
 
     # Print results
-    print("DataFrame with 0.8 of sessions:")
-    print(df_80)
-    print("\nDataFrame with 0.2 of sessions:")
-    print(df_20)
+    #print("DataFrame with 0.8 of sessions:")
+    #print(df_80)
+    #print("\nDataFrame with 0.2 of sessions:")
+    #print(df_20)
     return df_80,df_20
 
 def avaluation(GLM_df,df_20,regressors_string):

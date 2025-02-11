@@ -46,7 +46,7 @@ def psychometric(x):
     return 1/(1 + y)
 
 def psychometric_fit(ax,data_vec):
-    n_bins = 20
+    n_bins = 10
     phi= 1
     for df_glm_mice in data_vec:
         df_glm_mice['binned_ev'] = pd.qcut(df_glm_mice['V_t'], n_bins,duplicates='drop')

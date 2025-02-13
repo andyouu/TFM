@@ -70,14 +70,21 @@ def psychometric(x):
 
 def psychometric_plot(ax,df_glm_mice, data_label):
     n_bins = 10
-    bins = np.linspace(df_glm_mice['evidence'].min(), df_glm_mice['evidence'].max(), n_bins)
-    df_glm_mice['binned_ev'] = pd.cut(df_glm_mice['evidence'], bins=bins)
-    #print(df_glm_mice['choice_num'])
-
-    #grouped = df_glm_mice.groupby('binned_ev').agg(
-    #ev_mean=('evidence', 'mean'),
-    #p_right_mean=('choice_num', 'mean')
-    #).dropna() 
+    #equiespaced bins
+    #bins = np.linspace(df_glm_mice['evidence'].min(), df_glm_mice['evidence'].max(), n_bins)
+    #df_glm_mice['binned_ev'] = pd.cut(df_glm_mice['evidence'], bins=bins)
+    #equipopulated bins
+    df_glm_mice['binned_ev'] = pd.qcut(df_glm_mice['evidence'], n_bins,duplicates='drop')
+    bin_counts = df_glm_mice['binned_ev'].value_counts().sort_index()
+    #print histograms
+    #plt.figure(figsize=(10, 6))
+    #bin_counts.plot(kind='bar', width=0.8, color='skyblue', edgecolor='black')
+    #plt.title('Histogram of Elements in Each Bin', fontsize=16)
+    #plt.xlabel('Bin Interval', fontsize=14)
+    #plt.ylabel('Number of Elements', fontsize=14)
+    #plt.xticks(rotation=45, ha='right')
+    #plt.tight_layout()
+    #plt.show()
     grouped = df_glm_mice.groupby('binned_ev').agg(
     ev_mean=('evidence', 'mean'),
     p_right_mean=(data_label, 'mean')

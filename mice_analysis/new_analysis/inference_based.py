@@ -18,6 +18,7 @@ import os
 import matplotlib.patches as mpatches
 from extra_plotting import *
 import itertools
+from model_avaluation import *
 
 
 def compute_values(df,prob_switch,prob_rwd) -> pd.DataFrame:
@@ -149,7 +150,9 @@ def manual_computation(df: pd.DataFrame, prob_switch: float, prob_rwd: float, n_
 
 def inference_plot(prob_switch,prob_rwd,df):
     mice_counter = 0
-    f, axes = plt.subplots(1, len(df['subject'].unique()), figsize=(15, 5), sharey=True)
+    n_subjects = len(df['subject'].unique())
+    n_cols = int(np.ceil(n_subjects / 2))
+    f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
     for mice in df['subject'].unique():
         if mice != 'A10':
             df_mice = df.loc[df['subject'] == mice]
@@ -164,8 +167,15 @@ def inference_plot(prob_switch,prob_rwd,df):
             #df_values = compute_values(new_df_mice,  prob_switch, prob_rwd)
             #df_values_new = compute_values_manually(new_df_mice,  prob_switch, prob_rwd)
             df_values_new = manual_computation(new_df_mice,  prob_switch, prob_rwd,n_back=5)
-            axes[mice_counter].set_title(mice)
-            psychometric_fit(axes[mice_counter],[df_values_new])
+            df_80, df_20 = select_train_sessions(df_values_new)
+            ax = axes[mice_counter//n_cols, mice_counter%n_cols]
+            psychometric_fit(ax,[[df_80,df_20]])
+            ax.set_title(f'Psychometric Function: {mice}')
+            ax.axhline(0.5, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
+            ax.axvline(0, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
+            ax.set_xlabel('Evidence')
+            ax.set_ylabel('Prob of going right')
+            ax.legend(loc='upper left')
             mice_counter += 1
     plt.show()
 

@@ -49,7 +49,8 @@ def psychometric_fit(ax,data_vec):
     n_bins = 10
     phi= 1
     for df_glm_mice in data_vec:
-        df_glm_mice['binned_ev'] = pd.qcut(df_glm_mice['V_t'], n_bins,duplicates='drop')
+        df_80, df_20 = df_glm_mice
+        df_80['binned_ev'] = pd.qcut(df_80['V_t'], n_bins,duplicates='drop')
         #bin_counts = df_glm_mice['binned_ev'].value_counts().sort_index()
         #plt.figure(figsize=(10, 6))
         #bin_counts.plot(kind='bar', width=0.8, color='skyblue', edgecolor='black')
@@ -59,24 +60,29 @@ def psychometric_fit(ax,data_vec):
         #plt.xticks(rotation=45, ha='right')
         #plt.tight_layout()
         #plt.show()
-
-        grouped = df_glm_mice.groupby('binned_ev').agg(
+        grouped = df_80.groupby('binned_ev').agg(
         ev_mean=('V_t', 'mean'),
         p_right_mean=('choice_num', 'mean')
         ).dropna() 
         ev_means = grouped['ev_mean'].values
         p_right_mean = grouped['p_right_mean'].values
-        print(p_right_mean)
-        ev_means = grouped['ev_mean'].values
-        p_right_mean = grouped['p_right_mean'].values
+        [beta, alpha],_ = curve_fit(probit, ev_means, p_right_mean, p0=[0, 1])
+        df_20['binned_ev_20'] = pd.qcut(df_20['V_t'], n_bins,duplicates='drop')
+        grouped_20 = df_20.groupby('binned_ev_20').agg(
+        ev_mean_20 =('V_t', 'mean'),
+        p_right_mean_20=('choice_num', 'mean')
+        ).dropna() 
+        ev_means_20 = grouped_20['ev_mean_20'].values
+        p_right_mean_20 = grouped_20['p_right_mean_20'].values
+        bin_sizes = df_20['binned_ev_20'].value_counts(sort=False)
         #print(ev_means)
         #print(p_right_mean)
         [beta, alpha],_ = curve_fit(probit, ev_means, p_right_mean, p0=[0, 1])
         print(beta)
         print(alpha)
-        ax.plot(ev_means, probit(ev_means, beta,alpha), color='green',alpha = phi)
+        ax.plot(ev_means_20, probit(ev_means_20, beta,alpha), color='green', label = 'Model', alpha = phi)
         #ax.plot(ev_means, psychometric(ev_means), color='grey', alpha = 0.5)
-        ax.plot(ev_means, p_right_mean, marker = 'o', color = 'black', alpha = phi)
+        ax.plot(ev_means_20, p_right_mean_20, marker = 'o', color = 'black',label = 'Data', alpha = phi)
         phi -= 0.5
         print(40*'__')
 

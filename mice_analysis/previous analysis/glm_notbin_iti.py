@@ -146,6 +146,8 @@ def glm(df):
             ax1.set_title(f'Psychometric Function: {mice}')
             plot_GLM(ax, GLM_df)
             psychometric_data(ax1, df_20, GLM_df, regressors_string,'choice_num')
+            ax1.axhline(0.5, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
+            ax1.axvline(0, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
             ax1.set_xlabel('Evidence')
             ax1.set_ylabel('Prob of going right')
             ax1.legend(loc='upper left')

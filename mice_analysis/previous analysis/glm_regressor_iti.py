@@ -16,6 +16,7 @@ import matplotlib.dates as mdates
 import statsmodels.formula.api as smf
 import os
 import matplotlib.patches as mpatches
+from model_avaluation import *
 
 
 def obt_regressors(df,n,iti_bins) -> Tuple[pd.DataFrame, str]:
@@ -122,31 +123,42 @@ def plot_GLM(ax, GLM_df, alpha=1):
     # intercept = GLM_df.loc['Intercept', "coefficient"]
     ax.plot(orders[:len(r_plus)], r_plus, marker='o', color='indianred', alpha=alpha)
     ax.plot(orders[:len(r_minus)], r_minus, marker='o', color='teal', alpha=alpha)
-    ax.plot(orders[:len(plus_iti_bin_0)], plus_iti_bin_0, marker='o', color='orange', alpha=alpha-0)
-    ax.plot(orders[:len(plus_iti_bin_1)], plus_iti_bin_0, marker='o', color='orange', alpha=alpha-0.3)
-    ax.plot(orders[:len(plus_iti_bin_2)], plus_iti_bin_1, marker='o', color='orange', alpha=alpha-0.6)
-    ax.plot(orders[:len(plus_iti_bin_3)], plus_iti_bin_3, marker='o', color='orange', alpha=alpha-0.8)
-    ax.plot(orders[:len(minus_iti_bin_0)], minus_iti_bin_0, marker='o', color='green', alpha=alpha-0)
-    ax.plot(orders[:len(minus_iti_bin_1)], minus_iti_bin_0, marker='o', color='green', alpha=alpha-0.3)
-    ax.plot(orders[:len(minus_iti_bin_2)], minus_iti_bin_1, marker='o', color='green', alpha=alpha-0.6)
-    ax.plot(orders[:len(minus_iti_bin_3)], minus_iti_bin_3, marker='o', color='green', alpha=alpha-0.8)
+    ax.plot(orders[:len(plus_iti_bin_0)], plus_iti_bin_0, marker='o', color='indianred', alpha=alpha-0.5)
+    ax.plot(orders[:len(plus_iti_bin_1)], plus_iti_bin_0, marker='o', color='indianred', alpha=alpha-0.6)
+    ax.plot(orders[:len(plus_iti_bin_2)], plus_iti_bin_1, marker='o', color='indianred', alpha=alpha-0.7)
+    ax.plot(orders[:len(plus_iti_bin_3)], plus_iti_bin_3, marker='o', color='indianred', alpha=alpha-0.8)
+    ax.plot(orders[:len(minus_iti_bin_0)], minus_iti_bin_0, marker='o', color='teal', alpha=alpha-0.5)
+    ax.plot(orders[:len(minus_iti_bin_1)], minus_iti_bin_0, marker='o', color='teal', alpha=alpha-0.6)
+    ax.plot(orders[:len(minus_iti_bin_2)], minus_iti_bin_1, marker='o', color='teal', alpha=alpha-0.7)
+    ax.plot(orders[:len(minus_iti_bin_3)], minus_iti_bin_3, marker='o', color='teal', alpha=alpha-0.8)
 
+    legend_handles = [
+        mpatches.Patch(color='indianred', label=r'$r_+$'),
+        mpatches.Patch(color='teal', label= r'$r_-$')
+    ]
 
+    # Add legend with custom handles
+    ax.legend(handles=legend_handles)
+    # ax.axhline(y=intercept, label='Intercept', color='black')
+    ax.axhline(y=0, color='gray', linestyle='--')
 
-
-    # Show the plot
+    ax.set_ylabel('GLM weight')
+    ax.set_xlabel('Previous trials')
 
 
 def glm(df,iti_bins):
     mice_counter = 0
-    f, axes = plt.subplots(1, len(df['subject'].unique()), figsize=(15, 5), sharey=True)
+    n_subjects = len(df['subject'].unique())
+    n_cols = int(np.ceil(n_subjects / 2))
+    f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)    
     # iterate over mice
     for mice in df['subject'].unique():
         if mice != 'A10':
             df_mice = df.loc[df['subject'] == mice]
             # fit glm ignoring iti values
             df_glm_mice, regressors_string = obt_regressors(df=df_mice,n=5,iti_bins=iti_bins)
-            print(regressors_string)
+            #print(regressors_string)
+            #df_80, df_20 = select_train_sessions(df_glm_mice)
             mM_logit = smf.logit(formula='choice_num ~ ' + regressors_string, data=df_glm_mice).fit()
             GLM_df = pd.DataFrame({
                 'coefficient': mM_logit.params,
@@ -158,8 +170,9 @@ def glm(df,iti_bins):
             })
             print(GLM_df['coefficient'])
             # subplot title with name of mouse
-            axes[mice_counter].set_title(mice)
-            plot_GLM(axes[mice_counter],GLM_df)
+            ax = axes[mice_counter//n_cols, mice_counter%n_cols]
+            ax.set_title(f'GLM weights: {mice}')
+            plot_GLM(ax, GLM_df)
             mice_counter += 1
     plt.show()
 

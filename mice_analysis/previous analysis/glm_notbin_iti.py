@@ -116,44 +116,87 @@ def plot_GLM(ax, GLM_df, alpha=1):
 def glm(df):
     mice_counter = 0
     n_subjects = len(df['subject'].unique())
-    n_cols = int(np.ceil(n_subjects / 2))
-    f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
-    f1, axes1 = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
-    # iterate over mice
-    for mice in df['subject'].unique():
-        if mice != 'A10':
-            print(mice)
-            df_mice = df.loc[df['subject'] == mice]
-            # fit glm ignoring iti values
-            #df_mice['iti_bins'] = pd.cut(df_mice['iti_duration'], iti_bins)
-            #print(df_mice['subject'])
-            df_glm_mice, regressors_string = obt_regressors(df=df_mice,n=10)
-            df_80, df_20 = select_train_sessions(df_glm_mice)
-            mM_logit = smf.logit(formula='choice_num ~ ' + regressors_string, data=df_80).fit()
-            GLM_df = pd.DataFrame({
-                'coefficient': mM_logit.params,
-                'std_err': mM_logit.bse,
-                'z_value': mM_logit.tvalues,
-                'p_value': mM_logit.pvalues,
-                'conf_Interval_Low': mM_logit.conf_int()[0],
-                'conf_Interval_High': mM_logit.conf_int()[1]
-            })
-            # subplot title with name of mouse
-            ax = axes[mice_counter//n_cols, mice_counter%n_cols]
-            ax1 = axes1[mice_counter//n_cols, mice_counter%n_cols]
+    avaluate = 0
+    if not avaluate:
+        n_cols = int(np.ceil(n_subjects / 2))
+        f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
+        f1, axes1 = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
+        # iterate over mice
+        for mice in df['subject'].unique():
+            if mice != 'A10':
+                print(mice)
+                df_mice = df.loc[df['subject'] == mice]
+                # fit glm ignoring iti values
+                #df_mice['iti_bins'] = pd.cut(df_mice['iti_duration'], iti_bins)
+                #print(df_mice['subject'])
+                df_glm_mice, regressors_string = obt_regressors(df=df_mice,n = 10)
+                df_80, df_20 = select_train_sessions(df_glm_mice)
+                mM_logit = smf.logit(formula='choice_num ~ ' + regressors_string, data=df_80).fit()
+                GLM_df = pd.DataFrame({
+                    'coefficient': mM_logit.params,
+                    'std_err': mM_logit.bse,
+                    'z_value': mM_logit.tvalues,
+                    'p_value': mM_logit.pvalues,
+                    'conf_Interval_Low': mM_logit.conf_int()[0],
+                    'conf_Interval_High': mM_logit.conf_int()[1]
+                })
+                # subplot title with name of mouse
+                ax = axes[mice_counter//n_cols, mice_counter%n_cols]
+                ax1 = axes1[mice_counter//n_cols, mice_counter%n_cols]
 
-            ax.set_title(f'GLM weights: {mice}')
-            ax1.set_title(f'Psychometric Function: {mice}')
-            plot_GLM(ax, GLM_df)
-            psychometric_data(ax1, df_20, GLM_df, regressors_string,'choice_num')
-            ax1.axhline(0.5, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
-            ax1.axvline(0, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
-            ax1.set_xlabel('Evidence')
-            ax1.set_ylabel('Prob of going right')
-            ax1.legend(loc='upper left')
-            mice_counter += 1
-    plt.tight_layout()
-    plt.show()
+                ax.set_title(f'GLM weights: {mice}')
+                ax1.set_title(f'Psychometric Function: {mice}')
+                plot_GLM(ax, GLM_df)
+                #data_label can be either 'choice_num' or 'probability_r'
+                psychometric_data(ax1, df_20, GLM_df, regressors_string,'choice_num')
+                ax1.axhline(0.5, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
+                ax1.axvline(0, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
+                ax1.set_xlabel('Evidence')
+                ax1.set_ylabel('Prob of going right')
+                ax1.legend(loc='upper left')
+                mice_counter += 1
+        plt.tight_layout()
+        plt.show()
+    else:
+        unique_subjects = df['subject'][df['subject'] != 'A10'].unique()
+        n_back_vect = [1,3,5,7]
+        errors = np.zeros((len(unique_subjects),len(n_back_vect)))
+        #vector wit the trials back we are considering (the memory of the mice)
+        phi = 1
+        for i in range(len(n_back_vect)):
+            mice_counter = 0
+            for mice in unique_subjects:
+                df_mice = df.loc[df['subject'] == mice]
+                session_counts = df_mice['session'].value_counts()
+                mask = df_mice['session'].isin(session_counts[session_counts > 50].index)
+                df_mice['sign_session'] = 0
+                df_mice.loc[mask, 'sign_session'] = 1
+                new_df_mice = df_mice[df_mice['sign_session'] == 1]
+                df_glm_mice, regressors_string = obt_regressors(df=new_df_mice,n = n_back_vect[i])
+                df_80, df_20 = select_train_sessions(df_glm_mice)
+                mM_logit = smf.logit(formula='choice_num ~ ' + regressors_string, data=df_80).fit()
+                GLM_df = pd.DataFrame({
+                    'coefficient': mM_logit.params,
+                    'std_err': mM_logit.bse,
+                    'z_value': mM_logit.tvalues,
+                    'p_value': mM_logit.pvalues,
+                    'conf_Interval_Low': mM_logit.conf_int()[0],
+                    'conf_Interval_High': mM_logit.conf_int()[1]
+                })
+                errors[mice_counter][i]  = avaluation(GLM_df,df_80,regressors_string,'choice_num')
+                mice_counter += 1
+            print(errors)
+            print('phi=', phi)
+            print(errors[:,i])
+            plt.plot(range(0, len(unique_subjects)), errors[:,i], color='blue',marker='o',label = f'n = {n_back_vect[i]}', alpha = phi)
+            plt.xticks(range(0, len(unique_subjects)), unique_subjects)
+            phi = phi - 1/(len(n_back_vect))
+        plt.xlabel('Mice')
+        plt.ylabel('Error')
+        plt.title('Weighed error of the prob right logistic model')
+        plt.legend(loc='upper right')
+        plt.grid(True)
+        plt.show()
 
 
 if __name__ == '__main__':

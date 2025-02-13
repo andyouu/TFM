@@ -139,10 +139,10 @@ def manual_computation(df: pd.DataFrame, prob_switch: float, prob_rwd: float, n_
     new_df['left_outcome'] = new_df.groupby('session')['left_active'].shift(-1)
     new_df['prob_right'] = new_df.groupby('sequence')['right_outcome'].transform('mean')
     new_df['prob_left'] = new_df.groupby('sequence')['left_outcome'].transform('mean')
-    print(new_df[new_df['prob_left'] < 0.5])
+    #print(new_df[new_df['prob_left'] < 0.5])
     #les probabilitats no surten complementàries
     new_df['V_t'] = prob_rwd*(new_df['prob_right']- new_df['prob_left'])
-    print(new_df['V_t'])
+    #print(new_df['V_t'])
     return new_df
 
 
@@ -151,33 +151,67 @@ def manual_computation(df: pd.DataFrame, prob_switch: float, prob_rwd: float, n_
 def inference_plot(prob_switch,prob_rwd,df):
     mice_counter = 0
     n_subjects = len(df['subject'].unique())
-    n_cols = int(np.ceil(n_subjects / 2))
-    f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
-    for mice in df['subject'].unique():
-        if mice != 'A10':
-            df_mice = df.loc[df['subject'] == mice]
-            session_counts = df_mice['session'].value_counts()
-            mask = df_mice['session'].isin(session_counts[session_counts > 50].index)
-            df_mice['sign_session'] = 0
-            df_mice.loc[mask, 'sign_session'] = 1
-            new_df_mice = df_mice[df_mice['sign_session'] == 1]
-            #print(new_df_mice)
-            #print(new_df_mice['subject'])
-            print(mice)
-            #df_values = compute_values(new_df_mice,  prob_switch, prob_rwd)
-            #df_values_new = compute_values_manually(new_df_mice,  prob_switch, prob_rwd)
-            df_values_new = manual_computation(new_df_mice,  prob_switch, prob_rwd,n_back=5)
-            df_80, df_20 = select_train_sessions(df_values_new)
-            ax = axes[mice_counter//n_cols, mice_counter%n_cols]
-            psychometric_fit(ax,[[df_80,df_20]])
-            ax.set_title(f'Psychometric Function: {mice}')
-            ax.axhline(0.5, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
-            ax.axvline(0, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
-            ax.set_xlabel('Evidence')
-            ax.set_ylabel('Prob of going right')
-            ax.legend(loc='upper left')
-            mice_counter += 1
-    plt.show()
+    avaluate= 1
+    if not avaluate:
+        n_cols = int(np.ceil(n_subjects / 2))
+        f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
+        for mice in df['subject'].unique():
+            if mice != 'A10':
+                df_mice = df.loc[df['subject'] == mice]
+                session_counts = df_mice['session'].value_counts()
+                mask = df_mice['session'].isin(session_counts[session_counts > 50].index)
+                df_mice['sign_session'] = 0
+                df_mice.loc[mask, 'sign_session'] = 1
+                new_df_mice = df_mice[df_mice['sign_session'] == 1]
+                #print(new_df_mice)
+                #print(new_df_mice['subject'])
+                print(mice)
+                #df_values_new = compute_values(new_df_mice,  prob_switch, prob_rwd)
+                #df_values_new = compute_values_manually(new_df_mice,  prob_switch, prob_rwd)
+                df_values_new = manual_computation(new_df_mice,  prob_switch, prob_rwd,n_back=5)
+                df_80, df_20 = select_train_sessions(df_values_new)
+                ax = axes[mice_counter//n_cols, mice_counter%n_cols]
+                psychometric_fit(ax,[[df_80,df_20]])
+                ax.set_title(f'Psychometric Function: {mice}')
+                ax.axhline(0.5, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
+                ax.axvline(0, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
+                ax.set_xlabel('Evidence')
+                ax.set_ylabel('Prob of going right')
+                ax.legend(loc='upper left')
+                mice_counter += 1
+        plt.show()
+    else:
+        n_back_vect = np.array([1,3,5,7])
+        unique_subjects = df['subject'][df['subject'] != 'A10'].unique()
+        errors = np.zeros((len(unique_subjects),len(n_back_vect)))
+        #vector wit the trials back we are considering (the memory of the mice)
+        phi = 1
+        for i in range(len(n_back_vect)):
+            mice_counter = 0
+            for mice in unique_subjects:
+                df_mice = df.loc[df['subject'] == mice]
+                session_counts = df_mice['session'].value_counts()
+                mask = df_mice['session'].isin(session_counts[session_counts > 50].index)
+                df_mice['sign_session'] = 0
+                df_mice.loc[mask, 'sign_session'] = 1
+                new_df_mice = df_mice[df_mice['sign_session'] == 1]
+                df_values = manual_computation(new_df_mice,  prob_switch, prob_rwd,n_back_vect[i])
+                df_80, df_20 = select_train_sessions(df_values)
+                errors[mice_counter][i]  = avaluation(df_20,df_80)
+                mice_counter += 1
+            print(errors)
+            print('phi=', phi)
+            print(errors[:,i])
+            plt.plot(range(0, len(unique_subjects)), errors[:,i], color='green',marker='o',label = f'n = {n_back_vect[i]}', alpha = phi)
+            plt.xticks(range(0, len(unique_subjects)), unique_subjects)
+            phi = phi - 1/(len(n_back_vect))
+        plt.xlabel('Mice')
+        plt.ylabel('Error')
+        plt.title('Weighed error of the inference-based model')
+        plt.legend(loc='upper right')
+        plt.grid(True)
+        plt.show()
+
 
 if __name__ == '__main__':
     data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/global_trials_maybe_updated.csv'

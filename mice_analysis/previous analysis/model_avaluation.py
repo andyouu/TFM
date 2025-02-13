@@ -104,7 +104,7 @@ def select_train_sessions(df):
     #print(df_20)
     return df_80,df_20
 
-def avaluation(GLM_df,df_20,regressors_string):
+def avaluation(GLM_df,df_20,regressors_string,label_data):
     regressors_vect = regressors_string.split(' + ')
     coefficients = GLM_df['coefficient']
     df_20['evidence'] = 0
@@ -114,12 +114,12 @@ def avaluation(GLM_df,df_20,regressors_string):
     df_20['binned_ev'] = pd.qcut(df_20['evidence'], n_bins,duplicates='drop')
     grouped = df_20.groupby('binned_ev').agg(
     ev_mean=('evidence', 'mean'),
-    p_right_mean=('choice_num', 'mean')
+    p_right_mean=(label_data, 'mean')
     ).dropna() 
     ev_means = grouped['ev_mean'].values
     p_right_mean = grouped['p_right_mean'].values
     bin_sizes = df_20['binned_ev'].value_counts(sort=False)
-    print(bin_sizes)
+    #print(bin_sizes)
     weights = bin_sizes / np.sum(bin_sizes)  # Normalize weights to sum to 1
     predicted_p_right = psychometric(ev_means)
     wmse = np.sum(weights * (p_right_mean - predicted_p_right) ** 2)    

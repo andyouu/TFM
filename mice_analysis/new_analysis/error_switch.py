@@ -56,21 +56,29 @@ def number_fails_plot(df, n):
 
 
 def prob_switch(df, n):
-    count = np.zeros((n, 3))
+    count = np.zeros((n, 3))  # Initialize counters
 
     i = 0
     while i < len(df) - 1:
         j = 0
-        while (i + j < len(df)) and (df.loc[i + j, 'outcome'] == 'incorrect'):
+        # Count consecutive incorrect outcomes on the same side
+        correct_case = 1
+        while (i + j < len(df)) and (df.loc[i + j, 'outcome'] == 'incorrect') and correct_case:
+            if j > 0 and df.loc[i + j, 'choice'] != df.loc[i + j - 1, 'choice']:
+                correct_case = 0 # Exit if choices are not on the same side
+                break  
             j += 1
 
-        if j > 0:
+        if j > 0 and correct_case:
             if j < n:
-                count[j][0] += 1 
+                count[j][0] += 1  # Total cases with j consecutive incorrect choices on the same side
                 if (i + j < len(df)) and (df.loc[i + j, 'choice'] != df.loc[i + j - 1, 'choice']):
-                    count[j][1] += 1
+                    count[j][1] += 1  # Count switches after the sequence
 
         i += max(j, 1)
+
+    # Calculate probabilities and standard errors
+    print(count)
     probabilities = []
     std_errors = []
     for k in range(n):
@@ -82,22 +90,21 @@ def prob_switch(df, n):
             probabilities.append(np.nan)
             std_errors.append(np.nan)
 
-    # Probability of switching with error bars
+    # Plot 1: Probability of switching with error bars
     plt.figure(figsize=(12, 5))
-
     plt.subplot(1, 2, 1)
-    plt.errorbar(range(1, n + 1), probabilities, yerr=std_errors, fmt='o-', capsize=5)
-    plt.xlabel('Number of Consecutive Failures')
+    plt.errorbar(range(0, n), probabilities, yerr=std_errors, fmt='o-', capsize=5)
+    plt.xlabel('Number of Consecutive Failures on the Same Side')
     plt.ylabel('Probability of Switching')
-    plt.title('Probability of Switching Given Number of Errors')
+    plt.title('Probability of Switching Given Number of Errors on the Same Side')
     plt.grid(True)
 
-    # PHistogram of cases for each number of errors
+    # Plot 2: Histogram of cases for each number of errors
     plt.subplot(1, 2, 2)
-    plt.bar(range(1, n + 1), count[:, 0], color='skyblue')
-    plt.xlabel('Number of Consecutive Failures')
+    plt.bar(range(0, n), count[:, 0], color='skyblue')
+    plt.xlabel('Number of Consecutive Failures on the Same Side')
     plt.ylabel('Number of Cases')
-    plt.title('Histogram of Cases for Each Number of Errors')
+    plt.title('Histogram of Cases for Each Number of Errors on the Same Side')
     plt.grid(True)
 
     plt.tight_layout()

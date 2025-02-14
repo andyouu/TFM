@@ -69,6 +69,9 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     new_df.loc[(new_df['choice'] == new_df['choice_1']), 'switch_num'] = 0
     new_df.loc[(new_df['choice'] != new_df['choice_1']), 'switch_num'] = 1
 
+    #
+    new_df['outcome_bool_1'] = new_df.groupby('session')['outcome_bool'].shift(1)
+
     # build the regressors for previous trials
     regr_plus = ''
     regr_minus = ''
@@ -76,14 +79,14 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
         new_df[f'choice_{i}'] = new_df.groupby('session')['choice'].shift(i)
         
         #prepare the data for the error_switch regressor rss_-
-        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool'] == 0), f'rss_minus{i}'] = 1
-        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool'] == 1), f'rss_minus{i}'] = 0
+        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool_1'] == 0), f'rss_minus{i}'] = 1
+        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool_1'] == 1), f'rss_minus{i}'] = 0
         new_df.loc[new_df[f'choice_{i}'] != new_df['choice_1'], f'rss_minus{i}'] = 0
         new_df[f'rss_minus{i}'] = pd.to_numeric(new_df[f'rss_minus{i}'].fillna('other'), errors='coerce')
 
         #prepare the data for the error_switch regressor rss_-
-        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool'] == 1), f'rss_plus{i}'] = 1
-        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool'] == 0), f'rss_plus{i}'] = 0
+        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool_1'] == 1), f'rss_plus{i}'] = 1
+        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool_1'] == 0), f'rss_plus{i}'] = 0
         new_df.loc[new_df[f'choice_{i}'] != new_df['choice_1'], f'rss_plus{i}'] = 0
         new_df[f'rss_plus{i}'] = pd.to_numeric(new_df[f'rss_plus{i}'].fillna('other'), errors='coerce')
         regr_plus += f'rss_plus{i} + '
@@ -128,7 +131,7 @@ def plot_GLM(ax, GLM_df, alpha=1):
 def glm(df):
     mice_counter = 0
     n_subjects = len(df['subject'].unique())
-    avaluate = 1
+    avaluate = 0
     if not avaluate:
         n_cols = int(np.ceil(n_subjects / 2))
         f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
@@ -164,7 +167,7 @@ def glm(df):
                 ax1.axhline(0.5, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
                 ax1.axvline(0, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
                 ax1.set_xlabel('Evidence')
-                ax1.set_ylabel('Prob of going right')
+                ax1.set_ylabel('Prob of switching')
                 ax1.legend(loc='upper left')
                 mice_counter += 1
         plt.tight_layout()

@@ -19,6 +19,7 @@ import os
 import matplotlib.patches as mpatches
 from extra_plotting import *
 from model_avaluation import *
+from parsing import parsing
 
 
 def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
@@ -131,7 +132,7 @@ def plot_GLM(ax, GLM_df, alpha=1):
 def glm(df):
     mice_counter = 0
     n_subjects = len(df['subject'].unique())
-    avaluate = 0
+    avaluate = 1
     if not avaluate:
         n_cols = int(np.ceil(n_subjects / 2))
         f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
@@ -215,11 +216,10 @@ def glm(df):
 
 
 if __name__ == '__main__':
-    data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/global_trials_maybe_updated.csv'
+    data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/global_trials1.csv'
     df = pd.read_csv(data_path, sep=';', low_memory=False, dtype={'iti_duration': float})
-    # shift iti_duration to the next trial
-    df['iti_duration'] = df['iti_duration'].shift(1)
-    # get only trials with iti
-    #df = df[df['task'] != 'S4']
-    df = df[df['subject'] != 'manual']
-    glm(df)
+    # 1 for analisis of trained mice, 0 for untrained
+    print(df['task'].unique())
+    trained = 1
+    new_df = parsing(df,trained)
+    glm(new_df)

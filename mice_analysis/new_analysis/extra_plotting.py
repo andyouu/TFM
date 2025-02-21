@@ -50,15 +50,19 @@ def psychometric_fit(ax,data_vec):
     phi= 1
     for df_glm_mice in data_vec:
         df_80, df_20 = df_glm_mice
-        df_80['binned_ev'] = pd.qcut(df_80['V_t'], n_bins,duplicates='drop')
-        #bin_counts = df_glm_mice['binned_ev'].value_counts().sort_index()
-        #plt.figure(figsize=(10, 6))
-        #bin_counts.plot(kind='bar', width=0.8, color='skyblue', edgecolor='black')
-        #plt.title('Histogram of Elements in Each Bin', fontsize=16)
-        #plt.xlabel('Bin Interval', fontsize=14)
-        #plt.ylabel('Number of Elements', fontsize=14)
-        #plt.xticks(rotation=45, ha='right')
-        #plt.tight_layout()
+        bins = np.linspace(df_80['V_t'].min(), df_80['V_t'].max(), n_bins)
+        df_80['binned_ev'] = pd.cut(df_80['V_t'], bins=bins)
+        histogram = 1
+        if histogram:
+            bin_counts = df_80['binned_ev'].value_counts().sort_index()
+            plt.figure(figsize=(10, 6))
+            bin_counts.plot(kind='bar', width=0.8, color='skyblue', edgecolor='black')
+            plt.title('Histogram of Elements in Each Bin', fontsize=16)
+            plt.xlabel('Bin Interval', fontsize=14)
+            plt.ylabel('Number of Elements', fontsize=14)
+            plt.xticks(rotation=45, ha='right')
+            plt.tight_layout()
+            plt.show()
         #plt.show()
         grouped = df_80.groupby('binned_ev').agg(
         ev_mean=('V_t', 'mean'),

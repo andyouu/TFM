@@ -19,6 +19,7 @@ import matplotlib.patches as mpatches
 from extra_plotting import *
 import itertools
 from model_avaluation import *
+from parsing import parsing
 
 
 def compute_values(df,prob_switch,prob_rwd) -> pd.DataFrame:
@@ -111,6 +112,7 @@ def compute_values_manually(df,prob_switch,prob_rwd) -> pd.DataFrame:
 
 def manual_computation(df: pd.DataFrame, prob_switch: float, prob_rwd: float, n_back: int) -> pd.DataFrame:
     #A column with the choice of the mice will now be constructed
+    df= df.reset_index(drop=True)
     new_df = df.copy()
     new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'right'), 'choice'] = 0
     new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'left'), 'choice'] = 0
@@ -181,7 +183,8 @@ def inference_plot(prob_switch,prob_rwd,df):
                 mice_counter += 1
         plt.show()
     else:
-        n_back_vect = np.array([1,3,5,7])
+        #this have been chosen to ensure enough bins result from the processing of the data
+        n_back_vect = np.array([4,5,7,8])
         unique_subjects = df['subject'][df['subject'] != 'A10'].unique()
         errors = np.zeros((len(unique_subjects),len(n_back_vect)))
         #vector wit the trials back we are considering (the memory of the mice)
@@ -223,8 +226,9 @@ if __name__ == '__main__':
     df = df[df['subject'] != 'manual']
     prob_rwd = 0.99
     prob_switch = 0.5
-    new_df = df[['subject','session', 'outcome', 'side', 'iti_duration','probability_r']]
+    new_df = df[['subject','session', 'outcome', 'side', 'iti_duration','probability_r','task','date']]
     new_df = new_df.copy()
     new_df['outcome_bool'] = np.where(new_df['outcome'] == "correct", 1, 0)
-
+    trained = 0
+    new_df = parsing(new_df, trained)
     inference_plot(prob_switch,prob_rwd,new_df)

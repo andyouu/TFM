@@ -18,7 +18,8 @@ import os
 import matplotlib.patches as mpatches
 from extra_plotting import *
 from model_avaluation import *
-from parsing import *
+from parsing import parsing
+
 
 
 def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
@@ -70,14 +71,20 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     new_df['choice'] = pd.to_numeric(new_df['choice'].fillna('other'), errors='coerce')
 
     # build the regressors for previous trials
+    for i in range(1, n+1):
+        new_df[f'r_plus_{i}'] = new_df.groupby('session')['r_plus'].shift(i)
+        new_df[f'r_minus_{i}'] = new_df.groupby('session')['r_minus'].shift(i)
+        new_df[f'prb_r_r_plus{i}'] = new_df[f'r_plus_{i}']*new_df['probability_r']
+        new_df[f'prb_r_r_minus{i}'] = new_df[f'r_minus_{i}']*new_df['probability_r']
+
     regr_plus = ''
     regr_minus = ''
     for i in range(1, n + 1):
-        new_df[f'r_plus_{i}'] = new_df.groupby('session')['r_plus'].shift(i)
-        new_df[f'r_minus_{i}'] = new_df.groupby('session')['r_minus'].shift(i)
-        regr_plus += f'r_plus_{i} + '
-        regr_minus += f'r_minus_{i} + '
-    regressors_string = regr_plus + regr_minus[:-3]
+        regr_plus += f'r_plus_{i} + ' f'prb_r_r_plus{i} + '
+        regr_minus += f'r_minus_{i} + ' f'prb_r_r_minus{i} + '
+    
+    #add the for the block probability regressror
+    regressors_string = 'probability_r + ' + regr_plus + regr_minus[:-3]
 
     return new_df, regressors_string
 
@@ -93,11 +100,18 @@ def plot_GLM(ax, GLM_df, alpha=1):
     orders = np.arange(len(GLM_df))
 
     # filter the DataFrame to separate the coefficients
-    r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus'), "coefficient"]
-    r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus'), "coefficient"]
+    r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus_'), "coefficient"]
+    r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus_'), "coefficient"]
+    pr_r_plus = GLM_df.loc[GLM_df.index.str.contains('prb_r_r_p'), "coefficient"]
+    pr_r_minus = GLM_df.loc[GLM_df.index.str.contains('prb_r_r_m'), "coefficient"]
+
     # intercept = GLM_df.loc['Intercept', "coefficient"]
     ax.plot(orders[:len(r_plus)], r_plus, marker='o', color='indianred', alpha=alpha)
     ax.plot(orders[:len(r_minus)], r_minus, marker='o', color='teal', alpha=alpha)
+    ax.plot(orders[:len(pr_r_plus)], pr_r_plus, marker='o', color='indianred', alpha=alpha-0.5)
+    ax.plot(orders[:len(pr_r_minus)], pr_r_minus, marker='o', color='teal', alpha=alpha-0.5)
+
+
 
     # Create custom legend handles with labels and corresponding colors
     legend_handles = [
@@ -129,8 +143,9 @@ def glm(df):
                 # fit glm ignoring iti values
                 #df_mice['iti_bins'] = pd.cut(df_mice['iti_duration'], iti_bins)
                 #print(df_mice['subject'])
-                df_glm_mice, regressors_string = obt_regressors(df=df_mice,n = 10)
+                df_glm_mice, regressors_string = obt_regressors(df=df_mice,n = 5)
                 df_80, df_20 = select_train_sessions(df_glm_mice)
+                print(regressors_string)
                 mM_logit = smf.logit(formula='choice_num ~ ' + regressors_string, data=df_80).fit()
                 GLM_df = pd.DataFrame({
                     'coefficient': mM_logit.params,
@@ -140,6 +155,7 @@ def glm(df):
                     'conf_Interval_Low': mM_logit.conf_int()[0],
                     'conf_Interval_High': mM_logit.conf_int()[1]
                 })
+                print(GLM_df['coefficient'])
                 # subplot title with name of mouse
                 ax = axes[mice_counter//n_cols, mice_counter%n_cols]
                 ax1 = axes1[mice_counter//n_cols, mice_counter%n_cols]
@@ -204,7 +220,6 @@ if __name__ == '__main__':
     df = pd.read_csv(data_path, sep=';', low_memory=False, dtype={'iti_duration': float})
     # 1 for analisis of trained mice, 0 for untrained
     print(df['task'].unique())
-    trained = 1
+    trained = 0
     new_df = parsing(df,trained)
-    #glm(new_df)
-    performance(new_df)
+    glm(new_df)

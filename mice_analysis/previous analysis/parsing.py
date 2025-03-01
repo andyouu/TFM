@@ -55,5 +55,24 @@ def performance(df):
     plt.tight_layout()
     plt.show()
 
+def expo_fit(x,tau):
+    return np.exp(-x/tau)
 
+def exp_regressors(GLM_df):
+    # Extract coefficients for r_plus and r_minus
+    r_plus = GLM_df.loc[GLM_df.index.str.startswith('r_plus_'), "coefficient"].values
+    r_minus = GLM_df.loc[GLM_df.index.str.startswith('r_minus_'), "coefficient"].values
+    
+    # Create orders array (indices for fitting)
+    orders_plus = np.arange(len(r_plus))  # Orders for r_plus
+    orders_minus = np.arange(len(r_minus))  # Orders for r_minus
+    
+    # Fit exponential function for r_plus
+    tau_plus, _ = curve_fit(expo_fit, orders_plus, r_plus, p0=[1])  # Initial guess for tau
+    print('tau +:', tau_plus[0])
+    
+    # Fit exponential function for r_minus
+    tau_minus, _ = curve_fit(expo_fit, orders_minus, r_minus, p0=[1])  # Initial guess for tau
+    print('tau -:', tau_minus[0])
+    return tau_plus[0],tau_minus[0]
 

@@ -105,8 +105,9 @@ def psychometric_data(ax,df_glm_mice, GLM_df,regressors_string,data_label):
     #we will first compute the evidence:
     regressors_vect = regressors_string.split(' + ')
     coefficients = GLM_df['coefficient']
-    df_glm_mice['evidence'] = 0
+    df_glm_mice['evidence'] = coefficients['Intercept']
     for j in range(len(regressors_vect)):
+        
         df_glm_mice['evidence']+= coefficients[regressors_vect[j]]*df_glm_mice[regressors_vect[j]]
     #psychometric_fit(ax,df_glm_mice)
     psychometric_plot(ax,df_glm_mice,data_label)

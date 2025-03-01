@@ -121,6 +121,7 @@ def glm(df):
         n_cols = int(np.ceil(n_subjects / 2))
         f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
         f1, axes1 = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
+        exponents = np.zeros((n_subjects,2))
         # iterate over mice
         for mice in df['subject'].unique():
             if mice != 'A10':
@@ -140,6 +141,7 @@ def glm(df):
                     'conf_Interval_Low': mM_logit.conf_int()[0],
                     'conf_Interval_High': mM_logit.conf_int()[1]
                 })
+                exponents[mice_counter] = exp_regressors(GLM_df)
                 # subplot title with name of mouse
                 ax = axes[mice_counter//n_cols, mice_counter%n_cols]
                 ax1 = axes1[mice_counter//n_cols, mice_counter%n_cols]
@@ -157,6 +159,8 @@ def glm(df):
                 mice_counter += 1
         plt.tight_layout()
         plt.show()
+        print(exponents)
+        print(sum(exponents)/9)
     else:
         unique_subjects = df['subject'][df['subject'] != 'A10'].unique()
         n_back_vect = [1,3,5,7]
@@ -206,5 +210,5 @@ if __name__ == '__main__':
     print(df['task'].unique())
     trained = 1
     new_df = parsing(df,trained)
-    #glm(new_df)
-    performance(new_df)
+    glm(new_df)
+    #performance(new_df)

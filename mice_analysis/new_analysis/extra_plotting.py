@@ -18,7 +18,7 @@ import os
 import matplotlib.patches as mpatches
 
 
-def probit(x, beta, alpha):
+def probit(X, beta,alpha):
         """
         Return probit function with parameters alpha and beta.
 
@@ -37,7 +37,8 @@ def probit(x, beta, alpha):
             probit value for the given x, beta and alpha.
 
         """
-        y = np.exp(-beta * x + alpha)
+        [x,s] = X
+        y = np.exp(-beta * x + s * alpha)
         return 1/(1 + y)
 
 
@@ -52,7 +53,7 @@ def psychometric_fit(ax,data_vec):
         df_80, df_20 = df_glm_mice
         bins = np.linspace(df_80['V_t'].min(), df_80['V_t'].max(), n_bins)
         df_80['binned_ev'] = pd.cut(df_80['V_t'], bins=bins)
-        histogram = 1
+        histogram = 0
         if histogram:
             bin_counts = df_80['binned_ev'].value_counts().sort_index()
             plt.figure(figsize=(10, 6))
@@ -63,28 +64,31 @@ def psychometric_fit(ax,data_vec):
             plt.xticks(rotation=45, ha='right')
             plt.tight_layout()
             plt.show()
-        #plt.show()
         grouped = df_80.groupby('binned_ev').agg(
         ev_mean=('V_t', 'mean'),
-        p_right_mean=('choice_num', 'mean')
+        side = ('side_num','mean'),
+        p_right_mean=('choice_num', 'mean'),
         ).dropna() 
         ev_means = grouped['ev_mean'].values
         p_right_mean = grouped['p_right_mean'].values
-        [beta, alpha],_ = curve_fit(probit, ev_means, p_right_mean, p0=[0, 1])
+        side = grouped['side'].values
         df_20['binned_ev_20'] = pd.qcut(df_20['V_t'], n_bins,duplicates='drop')
         grouped_20 = df_20.groupby('binned_ev_20').agg(
         ev_mean_20 =('V_t', 'mean'),
-        p_right_mean_20=('choice_num', 'mean')
+        p_right_mean_20=('choice_num', 'mean'),
+        side_20=('side_num', 'mean')
         ).dropna() 
         ev_means_20 = grouped_20['ev_mean_20'].values
         p_right_mean_20 = grouped_20['p_right_mean_20'].values
+        side_20 = grouped_20['side_20'].values
         bin_sizes = df_20['binned_ev_20'].value_counts(sort=False)
-        #print(ev_means)
-        #print(p_right_mean)
-        [beta, alpha],_ = curve_fit(probit, ev_means, p_right_mean, p0=[0, 1])
+        print(ev_means)
+        print(p_right_mean)
+        print(side)
+        [beta, alpha],_ = curve_fit(probit, [ev_means,side], p_right_mean, p0=[0, 1])
         print(beta)
         print(alpha)
-        ax.plot(ev_means_20, probit(ev_means_20, beta,alpha), color='green', label = 'Model', alpha = phi)
+        ax.plot(ev_means_20, probit([ev_means_20,side_20], beta,alpha), color='green', label = 'Model', alpha = phi)
         #ax.plot(ev_means, psychometric(ev_means), color='grey', alpha = 0.5)
         ax.plot(ev_means_20, p_right_mean_20, marker = 'o', color = 'black',label = 'Data', alpha = phi)
         phi -= 0.5

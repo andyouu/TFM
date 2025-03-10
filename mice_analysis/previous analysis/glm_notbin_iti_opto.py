@@ -37,7 +37,7 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
         regressors_string([string]) :  [regressioon formula]
     """
     # Select the columns needed for the regressors
-    new_df = df[['session', 'outcome', 'side', 'iti_duration','probability_r']]
+    new_df = df[['session', 'outcome', 'side', 'iti_duration','probability_r','opto_bool']]
     new_df = new_df.copy()
     new_df['outcome_bool'] = np.where(new_df['outcome'] == "correct", 1, 0)
     #A column indicating significant columns will be constructed
@@ -76,17 +76,11 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     new_df.loc[new_df['probability_r'] > 0.7, 'prob_low'] = 0
     new_df.loc[new_df['probability_r'] < 0.8, 'prob_low'] = 1
     
-    #build the block_probability regressor
-    new_df['prob_block'] = np.nan
-    new_df.loc[new_df['probability_r'] > 0.5, 'prob_block'] = new_df['probability_r']
-    new_df.loc[new_df['probability_r'] < 0.5, 'prob_block'] = new_df['probability_r'] - 1 # we want the probabilities to be symmetric, if we considered 
-                                                                                          # p in both sides we would not give the same weight to both options
-
     for i in range(1, n+1):
         new_df[f'r_plus_{i}'] = new_df.groupby('session')['r_plus'].shift(i)
         new_df[f'r_minus_{i}'] = new_df.groupby('session')['r_minus'].shift(i)
-        new_df[f'prb_r_r_plus{i}'] = new_df[f'r_plus_{i}']*new_df['prob_block']
-        new_df[f'prb_r_r_minus{i}'] = new_df[f'r_minus_{i}']*new_df['prob_block']
+        new_df[f'prb_r_r_plus{i}'] = new_df[f'r_plus_{i}']*new_df['opto_bool']
+        new_df[f'prb_r_r_minus{i}'] = new_df[f'r_minus_{i}']*new_df['opto_bool']
 
     regr_plus = ''
     regr_minus = ''
@@ -94,15 +88,15 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
         #regr_plus += f'r_plus_{i} + ' f'prb_r_r_plus{i} + '
         #regr_minus += f'r_minus_{i} + ' f'prb_r_r_minus{i} + '
         #try method
-        regr_plus += f'r_plus_{i} + prob_block * 'f'r_plus_{i} + '
-        regr_minus += f'r_minus_{i} + prob_block * 'f'r_minus_{i} + '
+        regr_plus += f'r_plus_{i} + opto_bool * 'f'r_plus_{i} + '
+        regr_minus += f'r_minus_{i} + opto_bool * 'f'r_minus_{i} + '
     
     #add the for the block probability regressror
-    regressors_string = 'prob_block + ' + regr_plus + regr_minus[:-3]
+    regressors_string = 'opto_bool + ' + regr_plus + regr_minus[:-3]
 
 
     #exponential regressor
-    expo_yes = 1
+    expo_yes = 0
     if expo_yes:
         new_df = new_df.reset_index(drop=True)
         tau_plus = 1.75
@@ -116,7 +110,7 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
                 new_df.loc[i+1, 'exponent_plus'] = np.exp(-1/tau_plus) * (new_df.loc[i,'r_plus'] + new_df.loc[i,'exponent_plus'])
             else:
                 new_df.loc[i+1, 'exponent_plus'] = np.exp(-1/tau_plus) * new_df.loc[i,'r_plus']
-        regressors_string = 'prob_block + ' + 'exponent_plus + ' + 'r_minus_1 + ' + 'prob_block * exponent_plus + ' + 'prob_block * r_minus_1'
+        regressors_string = 'opto_bool + ' + 'exponent_plus + ' + 'r_minus_1 + ' + 'opto_bool * exponent_plus + ' + 'opto_bool * r_minus_1'
             
         
     return new_df, regressors_string
@@ -137,8 +131,8 @@ def plot_GLM(ax, GLM_df, alpha=1):
     # filter the DataFrame to separate the coefficients
     r_plus = GLM_df.loc[GLM_df.index.str.startswith('r_plus_'), "coefficient"]
     r_minus = GLM_df.loc[GLM_df.index.str.startswith('r_minus_'), "coefficient"]
-    pr_r_plus = GLM_df.loc[GLM_df.index.str.startswith('prob_block:r_p'), "coefficient"]
-    pr_r_minus = GLM_df.loc[GLM_df.index.str.startswith('prob_block:r_m'), "coefficient"]
+    pr_r_plus = GLM_df.loc[GLM_df.index.str.startswith('opto_bool:r_p'), "coefficient"]
+    pr_r_minus = GLM_df.loc[GLM_df.index.str.startswith('opto_bool:r_m'), "coefficient"]
 
 
     # intercept = GLM_df.loc['Intercept', "coefficient"]
@@ -168,7 +162,7 @@ def glm(df):
     n_subjects = len(df['subject'].unique())
     avaluate = 0
     if not avaluate:
-        exponentiate = 1
+        exponentiate = 0
         if not exponentiate:
             n_cols = int(np.ceil(n_subjects / 2))
             f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
@@ -318,10 +312,13 @@ def glm(df):
 
 
 if __name__ == '__main__':
-    data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/global_trials1.csv'
-    df = pd.read_csv(data_path, sep=';', low_memory=False, dtype={'iti_duration': float})
+    data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/clean_opto_light_on.csv'
+    df = pd.read_csv(data_path, sep=',', low_memory=False, dtype={'iti_duration': float})
     # 1 for analisis of trained mice, 0 for untrained
     print(df['task'].unique())
     trained = 1
-    new_df = parsing(df,trained)
+    new_df = parsing(df,trained,1)
+    print(new_df)
+    #['S4_5_single_pulse' 'S4_5_second_condition' 'S4_5_third_condition']
+    new_df = new_df[new_df['task']== 'S4_5_single_pulse']
     glm(new_df)

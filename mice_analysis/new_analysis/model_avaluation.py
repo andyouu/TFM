@@ -51,11 +51,13 @@ def avaluation(df_20,df_80):
     print(df_80['binned_ev'])
     grouped = df_80.groupby('binned_ev').agg(
         ev_mean=('V_t', 'mean'),
-        p_right_mean=('choice_num', 'mean')
+        p_right_mean=('choice_num', 'mean'),
+        side = ('side_num','mean')
     ).dropna()
     ev_means = grouped['ev_mean'].values
     p_right_mean = grouped['p_right_mean'].values
-    [beta, alpha], _ = curve_fit(probit, ev_means, p_right_mean, p0=[0, 1])
+    side = grouped['side'].values
+    [beta, alpha], _ = curve_fit(probit, [ev_means,side], p_right_mean, p0=[0, 1])
 
     # Process df_20
     bins = np.linspace(df_20['V_t'].min(), df_20['V_t'].max(), n_bins)
@@ -64,22 +66,23 @@ def avaluation(df_20,df_80):
 
     grouped_20 = df_20.groupby('binned_ev_20').agg(
         ev_mean_20=('V_t', 'mean'),
-        p_right_mean_20=('choice_num', 'mean')
+        p_right_mean_20=('choice_num', 'mean'),
+        side_20 = ('side_num','mean')
     ).dropna()
     ev_means_20 = grouped_20['ev_mean_20'].values
     p_right_mean_20 = grouped_20['p_right_mean_20'].values
-
-
+    side_mean_20 = grouped_20['side_20'].values
     bin_sizes = df_20['binned_ev_20'].value_counts(sort=False)
-    #print(bin_sizes)
+    bin_sizes = bin_sizes.reindex(grouped_20.index)
     weights = bin_sizes / np.sum(bin_sizes)  # Normalize weights to sum to 1
-    predicted_p_right = probit(ev_means_20, beta,alpha)
+    predicted_p_right = probit([ev_means_20,side_mean_20], beta,alpha)
     print(ev_means_20)
     print(p_right_mean_20)
     print(40*'--')
-    print(weights)
-    print(p_right_mean)
-    print(predicted_p_right)
+    print(len(bin_sizes))
+    print(len(weights))
+    print(len(p_right_mean))
+    print(len(predicted_p_right))
     wmse = np.sum(weights * (p_right_mean_20 - predicted_p_right) ** 2)    
     print(wmse)
     return wmse

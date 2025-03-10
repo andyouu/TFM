@@ -107,7 +107,7 @@ def compute_values_manually(df,prob_switch,prob_rwd) -> pd.DataFrame:
     def_new.loc[def_new['choice'] == 'right', 'choice_num'] = 1
     def_new.loc[def_new['choice'] == 'left', 'choice_num'] = 0
     def_new['choice'] = pd.to_numeric(def_new['choice'].fillna('other'), errors='coerce')
-    print(def_new['V_t'])
+
     return def_new
 
 def manual_computation(df: pd.DataFrame, prob_switch: float, prob_rwd: float, n_back: int) -> pd.DataFrame:
@@ -145,6 +145,11 @@ def manual_computation(df: pd.DataFrame, prob_switch: float, prob_rwd: float, n_
     #les probabilitats no surten complementàries
     new_df['V_t'] = prob_rwd*(new_df['prob_right']- new_df['prob_left'])
     #print(new_df['V_t'])
+
+    new_df['side_num'] = np.nan
+    new_df.loc[new_df['side'] == 'right', 'side_num'] = 1
+    #Vertechi I believe states that s(left) = -1 but the fit looks to be atrocious for that value
+    new_df.loc[new_df['side'] == 'left', 'side_num'] = 0
     return new_df
 
 
@@ -165,8 +170,6 @@ def inference_plot(prob_switch,prob_rwd,df):
                 df_mice['sign_session'] = 0
                 df_mice.loc[mask, 'sign_session'] = 1
                 new_df_mice = df_mice[df_mice['sign_session'] == 1]
-                #print(new_df_mice)
-                #print(new_df_mice['subject'])
                 print(mice)
                 #df_values_new = compute_values(new_df_mice,  prob_switch, prob_rwd)
                 #df_values_new = compute_values_manually(new_df_mice,  prob_switch, prob_rwd)
@@ -217,7 +220,7 @@ def inference_plot(prob_switch,prob_rwd,df):
 
 
 if __name__ == '__main__':
-    data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/global_trials_maybe_updated.csv'
+    data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/global_trials1.csv'
     df = pd.read_csv(data_path, sep=';', low_memory=False, dtype={'iti_duration': float})
     # shift iti_duration to the next trial
     df['iti_duration'] = df['iti_duration'].shift(1)
@@ -229,6 +232,6 @@ if __name__ == '__main__':
     new_df = df[['subject','session', 'outcome', 'side', 'iti_duration','probability_r','task','date']]
     new_df = new_df.copy()
     new_df['outcome_bool'] = np.where(new_df['outcome'] == "correct", 1, 0)
-    trained = 0
+    trained = 1
     new_df = parsing(new_df, trained)
     inference_plot(prob_switch,prob_rwd,new_df)

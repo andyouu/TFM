@@ -116,7 +116,7 @@ def plot_GLM(ax, GLM_df, alpha=1):
 def glm(df):
     mice_counter = 0
     n_subjects = len(df['subject'].unique())
-    avaluate = 0
+    avaluate = 1
     if not avaluate:
         n_cols = int(np.ceil(n_subjects / 2))
         f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
@@ -163,7 +163,7 @@ def glm(df):
         print(sum(exponents)/9)
     else:
         unique_subjects = df['subject'][df['subject'] != 'A10'].unique()
-        n_back_vect = [1,3,5,7]
+        n_back_vect = [3,5,7,9]
         errors = np.zeros((len(unique_subjects),len(n_back_vect)))
         #vector wit the trials back we are considering (the memory of the mice)
         phi = 1
@@ -209,6 +209,6 @@ if __name__ == '__main__':
     # 1 for analisis of trained mice, 0 for untrained
     print(df['task'].unique())
     trained = 1
-    new_df = parsing(df,trained)
+    new_df = parsing(df,trained,0)
     glm(new_df)
     #performance(new_df)

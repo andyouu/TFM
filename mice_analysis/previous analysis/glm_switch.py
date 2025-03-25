@@ -52,48 +52,51 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'left'), 'choice'] = 'right'
     new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'right'), 'choice'] = 'right'
     new_df['choice'].fillna('other', inplace=True)
-    
-    # prepare the data for the correct_choice regresor L_+  
-    new_df.loc[new_df['outcome_bool'] == 0, 'r_plus']  = 0
-    new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['choice'] == 'left'), 'r_plus'] = -1
-    new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['choice'] == 'right'), 'r_plus'] = 1
-    new_df['r_plus'] = pd.to_numeric(new_df['r_plus'].fillna('other'), errors='coerce')
-    
-    # prepare the data for the wrong_choice regressor L- 
-    new_df.loc[new_df['outcome_bool'] == 1, 'r_minus']  = 0
-    new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['choice'] == 'left'), 'r_minus'] = -1
-    new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['choice'] == 'right'), 'r_minus'] = 1
-    new_df['r_minus'] = pd.to_numeric(new_df['r_minus'].fillna('other'), errors='coerce')
 
     #prepare the switch regressor
     new_df['choice_1'] = new_df.groupby('session')['choice'].shift(1)
     new_df.loc[(new_df['choice'] == new_df['choice_1']), 'switch_num'] = 0
     new_df.loc[(new_df['choice'] != new_df['choice_1']), 'switch_num'] = 1
 
-    #
-    new_df['outcome_bool_1'] = new_df.groupby('session')['outcome_bool'].shift(1)
+
+    # Last trial reward
+    new_df['last_trial'] = new_df.groupby('session')['outcome_bool'].shift(1)
 
     # build the regressors for previous trials
-    regr_plus = ''
-    regr_minus = ''
+    rss_plus = ''
+    rss_minus = ''
+    rds_plus = ''
+    rds_minus = ''
     for i in range(2, n + 1):
         new_df[f'choice_{i}'] = new_df.groupby('session')['choice'].shift(i)
+        new_df[f'outcome_bool_{i}'] = new_df.groupby('session')['outcome_bool'].shift(i)
         
         #prepare the data for the error_switch regressor rss_-
-        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool_1'] == 0), f'rss_minus{i}'] = 1
-        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool_1'] == 1), f'rss_minus{i}'] = 0
+        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df[f'outcome_bool_{i}'] == 0), f'rss_minus{i}'] = 1
+        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df[f'outcome_bool_{i}'] == 1), f'rss_minus{i}'] = 0
         new_df.loc[new_df[f'choice_{i}'] != new_df['choice_1'], f'rss_minus{i}'] = 0
-        new_df[f'rss_minus{i}'] = pd.to_numeric(new_df[f'rss_minus{i}'].fillna('other'), errors='coerce')
-
+        new_df[f'rss_minus{i}'] = pd.to_numeric(new_df[f'rss_minus{i}'], errors='coerce')
         #prepare the data for the error_switch regressor rss_-
-        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool_1'] == 1), f'rss_plus{i}'] = 1
-        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df['outcome_bool_1'] == 0), f'rss_plus{i}'] = 0
+        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df[f'outcome_bool_{i}'] == 1), f'rss_plus{i}'] = 1
+        new_df.loc[(new_df[f'choice_{i}'] == new_df['choice_1']) & (new_df[f'outcome_bool_{i}'] == 0), f'rss_plus{i}'] = 0
         new_df.loc[new_df[f'choice_{i}'] != new_df['choice_1'], f'rss_plus{i}'] = 0
-        new_df[f'rss_plus{i}'] = pd.to_numeric(new_df[f'rss_plus{i}'].fillna('other'), errors='coerce')
-        regr_plus += f'rss_plus{i} + '
-        regr_minus += f'rss_minus{i} + '
-        print(new_df[f'rss_plus{i}'])
-    regressors_string = regr_plus + regr_minus[:-3]
+        new_df[f'rss_plus{i}'] = pd.to_numeric(new_df[f'rss_plus{i}'], errors='coerce')
+        rss_plus += f'rss_plus{i} + '
+        rss_minus += f'rss_minus{i} + '
+        #prepare the data for the error_switch regressor rds_-
+        # new_df.loc[(new_df[f'choice_{i}'] != new_df['choice_1']) & (new_df[f'outcome_bool_{i}'] == 0), f'rds_minus{i}'] = 1
+        # new_df.loc[(new_df[f'choice_{i}'] != new_df['choice_1']) & (new_df[f'outcome_bool_{i}'] == 1), f'rds_minus{i}'] = 0
+        # new_df.loc[new_df[f'choice_{i}'] == new_df['choice_1'], f'rds_minus{i}'] = 0
+        # new_df[f'rss_minus{i}'] = pd.to_numeric(new_df[f'rss_minus{i}'], errors='coerce')
+
+        #prepare the data for the error_switch regressor rds_+
+        new_df.loc[(new_df[f'choice_{i}'] != new_df['choice_1']) & (new_df[f'outcome_bool_{i}'] == 1), f'rds_plus{i}'] = 1
+        new_df.loc[(new_df[f'choice_{i}'] != new_df['choice_1']) & (new_df[f'outcome_bool_{i}'] == 0), f'rds_plus{i}'] = 0
+        new_df.loc[new_df[f'choice_{i}'] == new_df['choice_1'], f'rds_plus{i}'] = 0
+        new_df[f'rss_plus{i}'] = pd.to_numeric(new_df[f'rss_plus{i}'], errors='coerce')
+        rds_plus += f'rds_plus{i} + '
+    regressors_string = rss_plus + rss_minus + rds_plus + 'last_trial'
+    new_df = new_df.copy()
 
     return new_df, regressors_string
 
@@ -109,16 +112,22 @@ def plot_GLM(ax, GLM_df, alpha=1):
     orders = np.arange(len(GLM_df))
 
     # filter the DataFrame to separate the coefficients
-    r_plus = GLM_df.loc[GLM_df.index.str.contains('rss_plus'), "coefficient"]
-    r_minus = GLM_df.loc[GLM_df.index.str.contains('rss_minus'), "coefficient"]
+    rss_plus = GLM_df.loc[GLM_df.index.str.contains('rss_plus'), "coefficient"]
+    rss_minus = GLM_df.loc[GLM_df.index.str.contains('rss_minus'), "coefficient"]
+    rds_plus = GLM_df.loc[GLM_df.index.str.contains('rds_plus'), "coefficient"]
+    last_trial = GLM_df.loc[GLM_df.index.str.contains('last_trial'), "coefficient"]
     # intercept = GLM_df.loc['Intercept', "coefficient"]
-    ax.plot(orders[:len(r_plus)], r_plus, marker='o', color='indianred', alpha=alpha)
-    ax.plot(orders[:len(r_minus)], r_minus, marker='o', color='teal', alpha=alpha)
+    ax.plot(orders[:len(rss_plus)], rss_plus, marker='o', color='indianred', alpha=alpha)
+    ax.plot(orders[:len(rss_minus)], rss_minus, marker='o', color='teal', alpha=alpha)
+    ax.plot(orders[:len(rds_plus)], rds_plus, marker='o', color='red', alpha=alpha)
+    ax.plot(orders[:len(last_trial)], last_trial, marker='o', color='green', alpha=alpha)
 
     # Create custom legend handles with labels and corresponding colors
     legend_handles = [
-        mpatches.Patch(color='indianred', label='r+'),
-        mpatches.Patch(color='teal', label='r-')
+        mpatches.Patch(color='indianred', label='rss+'),
+        mpatches.Patch(color='teal', label='rss-'),
+        mpatches.Patch(color='red', label='rds+'),
+        mpatches.Patch(color='green', label='last_trial')
     ]
 
     # Add legend with custom handles
@@ -132,7 +141,7 @@ def plot_GLM(ax, GLM_df, alpha=1):
 def glm(df):
     mice_counter = 0
     n_subjects = len(df['subject'].unique())
-    avaluate = 1
+    avaluate = 0
     if not avaluate:
         n_cols = int(np.ceil(n_subjects / 2))
         f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
@@ -145,9 +154,10 @@ def glm(df):
                 # fit glm ignoring iti values
                 #df_mice['iti_bins'] = pd.cut(df_mice['iti_duration'], iti_bins)
                 #print(df_mice['subject'])
-                df_glm_mice, regressors_string = obt_regressors(df=df_mice,n = 10)
+                df_glm_mice, regressors_string = obt_regressors(df=df_mice,n = 5)
                 df_80, df_20 = select_train_sessions(df_glm_mice)
                 mM_logit = smf.logit(formula='switch_num ~ ' + regressors_string, data=df_80).fit()
+                print(regressors_string)     
                 GLM_df = pd.DataFrame({
                     'coefficient': mM_logit.params,
                     'std_err': mM_logit.bse,
@@ -175,7 +185,7 @@ def glm(df):
         plt.show()
     else:
         unique_subjects = df['subject'][df['subject'] != 'A10'].unique()
-        n_back_vect = [2,3,5,7]
+        n_back_vect = [2,3,5,7,10,15]
         errors = np.zeros((len(unique_subjects),len(n_back_vect)))
         #vector wit the trials back we are considering (the memory of the mice)
         phi = 1
@@ -221,5 +231,5 @@ if __name__ == '__main__':
     # 1 for analisis of trained mice, 0 for untrained
     print(df['task'].unique())
     trained = 1
-    new_df = parsing(df,trained)
+    new_df = parsing(df,trained,0)
     glm(new_df)

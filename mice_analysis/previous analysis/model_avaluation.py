@@ -107,11 +107,12 @@ def select_train_sessions(df):
 def avaluation(GLM_df,df_20,regressors_string,label_data):
     regressors_vect = regressors_string.split(' + ')
     coefficients = GLM_df['coefficient']
-    df_20['evidence'] = 0
+    df_20['evidence'] = coefficients['Intercept']
     for j in range(len(regressors_vect)):
         df_20['evidence']+= coefficients[regressors_vect[j]]*df_20[regressors_vect[j]]
     n_bins = 20
-    df_20['binned_ev'] = pd.qcut(df_20['evidence'], n_bins,duplicates='drop')
+    bins = np.linspace(df_20['evidence'].min(), df_20['evidence'].max(), n_bins)
+    df_20['binned_ev'] = pd.cut(df_20['evidence'], bins=bins)
     grouped = df_20.groupby('binned_ev').agg(
     ev_mean=('evidence', 'mean'),
     p_right_mean=(label_data, 'mean')

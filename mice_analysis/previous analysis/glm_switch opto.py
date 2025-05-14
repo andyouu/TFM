@@ -17,15 +17,12 @@ import matplotlib.dates as mdates
 import statsmodels.formula.api as smf
 import os
 import matplotlib.patches as mpatches
-from matplotlib import rcParams
-
-
 from extra_plotting import *
 from model_avaluation import *
 from parsing import parsing
 
 
-def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
+def obt_regressors(df,n,opto) -> Tuple[pd.DataFrame, str]:
     """
     Summary:
     This function processes the data needed to obtain the regressors and derives the 
@@ -40,7 +37,7 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
         regressors_string([string]) :  [regressioon formula]
     """
     # Select the columns needed for the regressors
-    new_df = df[['session', 'outcome', 'side', 'iti_duration','probability_r']]
+    new_df = df[['session', 'outcome', 'side', 'iti_duration','probability_r', 'prev_opto_bool']]
     new_df = new_df.copy()
     new_df['outcome_bool'] = np.where(new_df['outcome'] == "correct", 1, 0)
     #A column indicating significant columns will be constructed
@@ -57,9 +54,15 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     new_df['choice'].fillna('other', inplace=True)
 
     #prepare the switch regressor
+
     new_df['choice_1'] = new_df.groupby('session')['choice'].shift(1)
-    new_df.loc[(new_df['choice'] == new_df['choice_1']), 'switch_num'] = 0
-    new_df.loc[(new_df['choice'] != new_df['choice_1']), 'switch_num'] = 1
+    if opto:
+        new_df['switch_num'] = np.nan
+        new_df.loc[(new_df['choice'] == new_df['choice_1']) & (new_df['prev_opto_bool'] == 1), 'switch_num'] = 0
+        new_df.loc[(new_df['choice'] != new_df['choice_1']) & (new_df['prev_opto_bool'] == 1), 'switch_num'] = 1
+    else:
+        new_df.loc[(new_df['choice'] == new_df['choice_1']), 'switch_num'] = 0
+        new_df.loc[(new_df['choice'] != new_df['choice_1']), 'switch_num'] = 1
 
 
     # Last trial reward
@@ -141,101 +144,6 @@ def plot_GLM(ax, GLM_df, alpha=1):
     ax.set_ylabel('GLM weight')
     ax.set_xlabel('Previous trials')
 
-def plot_all_mice_glm_combined(df, figsize=(46.8, 33.1)):
-    """
-    Plot ALL mice's GLM weights in a SINGLE figure with:
-    - Your specified colors for coefficient types
-    - Mice differentiated by alpha levels
-    - A0 poster sizing
-    """
-    # Set your custom colors
-    rss_color = '#d62728'  # Red for r_plus
-    rds_color = '#ff7f0e'  # Orange for r_minus
-    minus_color = '#1f77b4'  # Blue for r_minus
-    neutral_color = '#7f7f7f'  # Gray for last_trial
-    
-    # Set global styling for poster
-    plt.rcParams.update({
-        'axes.titlesize': 50,
-        'axes.labelsize': 50,
-        'xtick.labelsize': 35,
-        'ytick.labelsize': 35,
-        'legend.fontsize': 25,
-        'lines.linewidth': 4,
-        'lines.markersize': 15
-    })
-    
-    # Create figure
-    fig, ax = plt.subplots(figsize=figsize)
-    
-    # Get list of mice (excluding A10)
-    mice_list = [m for m in df['subject'].unique() if m != 'A10']
-    n_mice = len(mice_list)
-    
-    # Create alpha levels for mice (from light to dark)
-    alphas = np.linspace(0.3, 1, n_mice)
-    
-    # Plot each mouse's GLM weights
-    for i, mice in enumerate(mice_list):
-        df_mice = df.loc[df['subject'] == mice]
-        
-        # Fit GLM (using your existing functions)
-        df_glm_mice, regressors_string = obt_regressors(df=df_mice, n=10)
-        df_80, _ = select_train_sessions(df_glm_mice)
-        mM_logit = smf.logit(formula='switch_num ~ ' + regressors_string, data=df_80).fit()
-        
-        # Get coefficients
-        orders = np.arange(len(mM_logit.params))
-        rss_plus = mM_logit.params[mM_logit.params.index.str.contains('rss_plus')]
-        rss_minus = mM_logit.params[mM_logit.params.index.str.contains('rss_minus')]
-        rds_plus = mM_logit.params[mM_logit.params.index.str.contains('rds_plus')]
-        last_trial = mM_logit.params[mM_logit.params.index.str.contains('last_trial')]
-        
-        # Plot with your colors and mouse-specific alpha
-        ax.plot(orders[:len(rss_plus)]+2, rss_plus, 'o-', 
-                color=rss_color, alpha=alphas[i], label=f'{mice} rss+')
-        ax.plot(orders[:len(rss_minus)]+2, rss_minus, 's--', 
-                color=minus_color, alpha=alphas[i], label=f'{mice} rss-')
-        ax.plot(orders[:len(rds_plus)]+2, rds_plus, '^-.', 
-                color=rds_color, alpha=alphas[i], label=f'{mice} rds+')
-        ax.plot(orders[:len(last_trial)]+1, last_trial, 'D:', 
-                color=neutral_color, alpha=alphas[i], label=f'{mice} last_trial')
-    plt.xticks(orders[:len(rss_plus)+2]+1, [str(int(x)) for x in orders[:len(rss_plus)+2]+1])
-    
-    # Add reference line and styling
-    ax.axhline(y=0, color='black', linestyle='--', linewidth=3, alpha=0.5)
-    ax.set_title('Combined GLM Weights for All Mice', pad=20)
-    ax.set_ylabel('GLM Weight', labelpad=20)
-    ax.set_xlabel('Previous Trials', labelpad=20)
-    ax.grid(True, linestyle=':', alpha=0.3)
-    
-    # Create simplified legends
-    # Legend 1: Coefficient types with your colors
-    coeff_handles = [
-        mpatches.Patch(color=rss_color, label=r'$rss_+$'),
-        mpatches.Patch(color=minus_color, label=r'$rss_-$'),
-        mpatches.Patch(color=rds_color, label=r'$rds_+$'),
-        mpatches.Patch(color=neutral_color, label='last_trial')
-    ]
-    legend1 = ax.legend(handles=coeff_handles, title='Coefficient Types',
-                       loc='upper left', bbox_to_anchor=(1.01, 1))
-    
-    # Legend 2: Mice with alpha gradient
-    mice_handles = []
-    for i, mice in enumerate(mice_list):
-        mice_handles.append(mpatches.Patch(color='gray', alpha=alphas[i], label=mice))
-    
-    ax.legend(handles=mice_handles, title='Mice (by alpha)',
-             loc='lower left', bbox_to_anchor=(1.01, 0))
-    
-    # Add the first legend back
-    ax.add_artist(legend1)
-    
-    # Adjust layout
-    plt.tight_layout(pad=5.0)
-    plt.subplots_adjust(right=0.75)  # Make space for legends
-    plt.show()
-
 def glm(df):
     mice_counter = 0
     n_subjects = len(df['subject'].unique())
@@ -252,7 +160,8 @@ def glm(df):
                 # fit glm ignoring iti values
                 #df_mice['iti_bins'] = pd.cut(df_mice['iti_duration'], iti_bins)
                 #print(df_mice['subject'])
-                df_glm_mice, regressors_string = obt_regressors(df=df_mice,n = 10)
+                #for just opto trials, set opto= 1
+                df_glm_mice, regressors_string = obt_regressors(df=df_mice,n = 20, opto = 1)
                 df_80, df_20 = select_train_sessions(df_glm_mice)
                 mM_logit = smf.logit(formula='switch_num ~ ' + regressors_string, data=df_80).fit()
                 print(regressors_string)     
@@ -281,7 +190,6 @@ def glm(df):
                 mice_counter += 1
         plt.tight_layout()
         plt.show()
-        plot_all_mice_glm_combined(df, figsize=(46.8, 33.1))
     else:
         unique_subjects = df['subject'][df['subject'] != 'A10'].unique()
         n_back_vect = [2,3,5,7,10,15]
@@ -325,10 +233,21 @@ def glm(df):
 
 
 if __name__ == '__main__':
-    data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/global_trials1.csv'
-    df = pd.read_csv(data_path, sep=';', low_memory=False, dtype={'iti_duration': float})
+    data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/clean_opto_light_on.csv'
+    df = pd.read_csv(data_path, sep=',', low_memory=False)
+    print(df['subject'])
+    df['task'].isin(['S4_5_single_pulse'])  #first condition AND new_df = df[df['prev_iti_duration'] > 6] #first condition matched iti
+    #df['task'].isin(['S4_5_second_condition'])  #second condition  AND new_df = df[df['prev_iti_duration'] > 0.5] #second condition matched iti
+    #df['task'].isin(['S4_5_third_condition'])  #third condition AND  new_df = df[(df['prev_iti_duration'] > 0.5) & (df['prev_iti_duration'] < 10)] #third condition matched iti
+
+    df['prev_iti_duration'] = df.groupby('session')['iti_duration'].shift()
+    new_df = df[df['prev_iti_duration'] > 6] #first condition matched iti
+    #new_df = df[df['prev_iti_duration'] > 0.5] #second condition matched iti
+    #new_df = df[(df['prev_iti_duration'] > 0.5) & (df['prev_iti_duration'] < 10)] #third condition matched iti
+    df['prev_iti_duration'] = df.groupby('session')['iti_duration'].shift()
+    df['prev_opto_bool'] = df.groupby('session')['opto_bool'].shift()
     # 1 for analisis of trained mice, 0 for untrained
-    print(df['task'].unique())
     trained = 1
-    new_df = parsing(df,trained,0)
+    new_df = parsing(df,trained,1)
+    print(new_df['prev_opto_bool'])
     glm(new_df)

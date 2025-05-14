@@ -16,6 +16,7 @@ import matplotlib.dates as mdates
 import statsmodels.formula.api as smf
 import os
 import matplotlib.patches as mpatches
+from matplotlib import rcParams
 from extra_plotting import *
 from model_avaluation import *
 from parsing import *
@@ -112,11 +113,104 @@ def plot_GLM(ax, GLM_df, alpha=1):
 
     ax.set_ylabel('GLM weight')
     ax.set_xlabel('Previous trials')
+def plot_all_mice_glm_combined(df, figsize=(46.8, 33.1)):
+    """
+    Plot ALL mice's GLM weights in a SINGLE figure with:
+    - Your specified colors (red for r_plus, blue for r_minus)
+    - Mice differentiated by alpha levels
+    - A0 poster sizing
+    """
+    # Set your custom colors
+    plus_color = '#d62728'  # Red for r_plus
+    minus_color = '#1f77b4'  # Blue for r_minus
+    
+    # Set global styling for poster
+    plt.rcParams.update({
+        'axes.titlesize': 50,
+        'axes.labelsize': 50,
+        'xtick.labelsize': 35,
+        'ytick.labelsize': 35,
+        'legend.fontsize': 25,
+        'lines.linewidth': 4,
+        'lines.markersize': 15
+    })
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    # Get list of mice (excluding A10)
+    mice_list = [m for m in df['subject'].unique() if m != 'A10']
+    n_mice = len(mice_list)
+    
+    # Create alpha levels for mice (from light to dark)
+    alphas = np.linspace(0.3, 1, n_mice)
+    
+    # Plot each mouse's GLM weights
+    for i, mice in enumerate(mice_list):
+        df_mice = df.loc[df['subject'] == mice]
+        
+        # Fit GLM (using your existing functions)
+        df_glm_mice, regressors_string = obt_regressors(df=df_mice, n=10)
+        df_80, _ = select_train_sessions(df_glm_mice)
+        mM_logit = smf.logit(formula='choice_num ~ ' + regressors_string, data=df_80).fit()
+        
+        # Create GLM DataFrame
+        GLM_df = pd.DataFrame({
+            'coefficient': mM_logit.params,
+            'std_err': mM_logit.bse,
+            'z_value': mM_logit.tvalues,
+            'p_value': mM_logit.pvalues,
+            'conf_Interval_Low': mM_logit.conf_int()[0],
+            'conf_Interval_High': mM_logit.conf_int()[1]
+        })
+        
+        # Get coefficients
+        orders = np.arange(len(GLM_df))
+        r_plus = GLM_df.loc[GLM_df.index.str.contains('r_plus'), "coefficient"]
+        r_minus = GLM_df.loc[GLM_df.index.str.contains('r_minus'), "coefficient"]
+        
+        # Plot with your colors and mouse-specific alpha
+        ax.plot(orders[:len(r_plus)], r_plus, 'o-', 
+                color=plus_color, alpha=alphas[i], label=f'{mice} r_plus')
+        ax.plot(orders[:len(r_minus)], r_minus, 's--', 
+                color=minus_color, alpha=alphas[i], label=f'{mice} r_minus')
+    
+    # Add reference line and styling
+    ax.axhline(y=0, color='black', linestyle='--', linewidth=3, alpha=0.5)
+    ax.set_title('Combined GLM Weights for All Mice', pad=20)
+    ax.set_ylabel('GLM Weight', labelpad=20)
+    ax.set_xlabel('Previous Trials', labelpad=20)
+    ax.grid(True, linestyle=':', alpha=0.3)
+    
+    # Create simplified legends
+    # Legend 1: Coefficient types with your colors
+    coeff_handles = [
+        mpatches.Patch(color=plus_color, label=r'$r_+$'),
+        mpatches.Patch(color=minus_color, label=r'$r_-$')
+    ]
+    legend1 = ax.legend(handles=coeff_handles, title='Coefficient Types',
+                       loc='upper left', bbox_to_anchor=(1.01, 1))
+    
+    # Legend 2: Mice with alpha gradient
+    mice_handles = []
+    for i, mice in enumerate(mice_list):
+        mice_handles.append(mpatches.Patch(color='gray', alpha=alphas[i], label=mice))
+    
+    ax.legend(handles=mice_handles, title='Mice (by alpha)',
+             loc='lower left', bbox_to_anchor=(1.01, 0))
+    
+    # Add the first legend back
+    ax.add_artist(legend1)
+    
+    # Adjust layout
+    plt.tight_layout(pad=5.0)
+    plt.subplots_adjust(right=0.75)  # Make space for legends
+    plt.show()
 
 def glm(df):
     mice_counter = 0
     n_subjects = len(df['subject'].unique())
-    avaluate = 1
+    avaluate = 0
     if not avaluate:
         n_cols = int(np.ceil(n_subjects / 2))
         f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
@@ -161,6 +255,7 @@ def glm(df):
         plt.show()
         print(exponents)
         print(sum(exponents)/9)
+        plot_all_mice_glm_combined(df, figsize=(46.8, 33.1))
     else:
         unique_subjects = df['subject'][df['subject'] != 'A10'].unique()
         n_back_vect = [3,5,7,9]

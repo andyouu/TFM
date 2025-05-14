@@ -152,13 +152,116 @@ def manual_computation(df: pd.DataFrame, prob_switch: float, prob_rwd: float, n_
     new_df.loc[new_df['side'] == 'left', 'side_num'] = 0
     return new_df
 
+def plot_all_mice_correct_inf_combined(df, figsize=(46.8, 33.1)):
+    """
+    Plot ALL mice's correct inference weights in a SINGLE figure with:
+    - Custom colors for coefficient types
+    - Mice differentiated by alpha levels
+    - A0 poster sizing
+    """
+    # Set your custom colors
+    beta_color = '#d62728'  # Red for beta (V_t)
+    side_color = '#1f77b4'  # Blue for side bias
+    
+    # Set global styling for poster
+    plt.rcParams.update({
+        'axes.titlesize': 50,
+        'axes.labelsize': 50,
+        'xtick.labelsize': 35,
+        'ytick.labelsize': 35,
+        'legend.fontsize': 25,
+        'lines.linewidth': 4,
+        'lines.markersize': 15
+    })
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    # Get list of mice (excluding A10)
+    mice_list = [m for m in df['subject'].unique() if m != 'A10']
+    n_mice = len(mice_list)
+    
+    # Create alpha levels for mice (from light to dark)
+    alphas = np.linspace(0.3, 1, n_mice)
+    
+    # Plot each mouse's coefficients
+    for i, mice in enumerate(mice_list):
+        df_mice = df.loc[df['subject'] == mice]
+        
+        # Filter sessions with sufficient trials
+        session_counts = df_mice['session'].value_counts()
+        mask = df_mice['session'].isin(session_counts[session_counts > 50].index)
+        df_mice['sign_session'] = 0
+        df_mice.loc[mask, 'sign_session'] = 1
+        new_df_mice = df_mice[df_mice['sign_session'] == 1]
+        
+        # Compute values and fit model
+        df_values_new = manual_computation(new_df_mice, prob_switch, prob_rwd, n_back=3)
+        df_80, _ = select_train_sessions(df_values_new)
+        
+        try:
+            mM_logit = smf.logit(formula='choice ~ V_t + side_num', data=df_80).fit()
+        except Exception as e:
+            print(f"Model fitting failed for {mice}: {str(e)}")
+            continue  # Skip this mouse if model fails
 
+        # Create coefficients DataFrame
+        GLM_df = pd.DataFrame({
+            'coefficient': mM_logit.params,
+            'std_err': mM_logit.bse,
+            'z_value': mM_logit.tvalues,
+            'p_value': mM_logit.pvalues,
+            'conf_Interval_Low': mM_logit.conf_int()[0],
+            'conf_Interval_High': mM_logit.conf_int()[1],
+            'regressor': mM_logit.params.index
+        })
+
+        # Get coefficients
+        beta = GLM_df.loc[GLM_df['regressor'].str.contains('V_t'), 'coefficient'].values[0]
+        side = GLM_df.loc[GLM_df['regressor'].str.contains('side_num'), 'coefficient'].values[0]
+        
+        # Plot with your colors and mouse-specific alpha
+        ax.bar(i-0.2, beta, width=0.4, color=beta_color, alpha=alphas[i], label=f'{mice} β' if i == 0 else "")
+        ax.bar(i+0.2, side, width=0.4, color=side_color, alpha=alphas[i], label=f'{mice} side' if i == 0 else "")
+    
+    # Add reference line and styling
+    ax.axhline(y=0, color='black', linestyle='-', linewidth=2)
+    ax.set_title('Combined Correct Inference Weights', pad=20)
+    ax.set_ylabel('Coefficient Value', labelpad=20)
+    ax.set_xticks(np.arange(n_mice))
+    ax.set_xticklabels(mice_list, rotation=45, ha='right')
+    ax.grid(True, axis='y', linestyle=':', alpha=0.3)
+    
+    # Create simplified legends
+    # Legend 1: Coefficient types with your colors
+    coeff_handles = [
+        mpatches.Patch(color=beta_color, label='β (Value)'),
+        mpatches.Patch(color=side_color, label='Side Bias')
+    ]
+    legend1 = ax.legend(handles=coeff_handles, title='Coefficient Types',
+                       loc='upper left', bbox_to_anchor=(1.01, 1))
+    
+    # Legend 2: Mice with alpha gradient
+    mice_handles = []
+    for i, mice in enumerate(mice_list):
+        mice_handles.append(mpatches.Patch(color='gray', alpha=alphas[i], label=mice))
+    
+    ax.legend(handles=mice_handles, title='Mice (by alpha)',
+             loc='lower left', bbox_to_anchor=(1.01, 0))
+    
+    # Add the first legend back
+    ax.add_artist(legend1)
+    
+    # Adjust layout
+    plt.tight_layout(pad=5.0)
+    plt.subplots_adjust(right=0.75, bottom=0.2)  # Make space for legends and x-labels
+    plt.show()
 
 
 def inference_plot(prob_switch,prob_rwd,df):
     mice_counter = 0
     n_subjects = len(df['subject'].unique())
-    avaluate= 1
+    avaluate= 0
     if not avaluate:
         n_cols = int(np.ceil(n_subjects / 2))
         f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
@@ -185,6 +288,7 @@ def inference_plot(prob_switch,prob_rwd,df):
                 ax.legend(loc='upper left')
                 mice_counter += 1
         plt.show()
+        plot_all_mice_correct_inf_combined(df, figsize=(46.8, 33.1))
     else:
         #this have been chosen to ensure enough bins result from the processing of the data
         n_back_vect = np.array([4,5,7,8])

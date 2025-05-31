@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import scipy
 from typing import Tuple
 from datetime import timedelta
 import matplotlib
@@ -15,6 +16,10 @@ from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.dates as mdates
 import statsmodels.formula.api as smf
 import os
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    roc_auc_score, brier_score_loss, confusion_matrix
+)
 import matplotlib.patches as mpatches
 from extra_plotting import *
 import itertools
@@ -110,7 +115,7 @@ def compute_values_manually(df,prob_switch,prob_rwd) -> pd.DataFrame:
 
     return def_new
 
-def manual_computation(df: pd.DataFrame, prob_switch: float, prob_rwd: float, n_back: int) -> pd.DataFrame:
+def manual_computation(df: pd.DataFrame, n_back: int, hist:bool) -> pd.DataFrame:
     #A column with the choice of the mice will now be constructed
     df= df.reset_index(drop=True)
     new_df = df.copy()
@@ -118,8 +123,6 @@ def manual_computation(df: pd.DataFrame, prob_switch: float, prob_rwd: float, n_
     new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'left'), 'choice'] = 0
     new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'left'), 'choice'] = 1
     new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'right'), 'choice'] = 1
-    new_df['choice'] = pd.to_numeric(new_df['choice'].fillna('other'), errors='coerce')
-    new_df['choice_num'] = new_df['choice']
     #Choide-reward will be created
     new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['choice'] == 0), 'choice_rwd'] = '00'    
     new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['choice'] == 1), 'choice_rwd'] = '01'  
@@ -128,31 +131,133 @@ def manual_computation(df: pd.DataFrame, prob_switch: float, prob_rwd: float, n_
     new_df['choice_rwd'] = new_df['choice_rwd'].fillna(' ')
     new_df = new_df.dropna(subset=['probability_r']).reset_index(drop=True)
     new_df['sequence'] = ''
-    for i in range(n_back):
-        new_df[f'choice_rwd{i+1}'] = new_df.groupby('session')['choice_rwd'].shift(i+1)
-        new_df['sequence'] = new_df['sequence'] + new_df[f'choice_rwd{i+1}']
-    new_df = new_df.dropna(subset=['sequence']).reset_index(drop=True)
     new_df['right_active'] = 0
     new_df['left_active'] = 0
     new_df.loc[(new_df['probability_r'] > 0.5), 'right_active'] = 1
     new_df.loc[(new_df['probability_r'] < 0.5), 'left_active'] = 1
-
-    new_df['right_outcome'] = new_df.groupby('session')['right_active'].shift(-1)
-    new_df['left_outcome'] = new_df.groupby('session')['left_active'].shift(-1)
+        # Create shifted columns for n_back previous trials and build sequence string
+    for i in range(n_back):
+        new_df[f'choice_rwd{i+1}'] = new_df.groupby('session')['choice_rwd'].shift(i+1)
+        new_df['sequence'] = new_df['sequence'] + new_df[f'choice_rwd{i+1}']
+    
+    # Remove rows with incomplete sequences
+    new_df = new_df.dropna(subset=['sequence']).reset_index(drop=True)
+    
+    # Create active side indicators based on probability
+    new_df['right_active'] = 0  # 1 if right side is more probable
+    new_df['left_active'] = 0   # 1 if left side is more probable
+    new_df.loc[(new_df['probability_r'] > 0.5), 'right_active'] = 1
+    new_df.loc[(new_df['probability_r'] < 0.5), 'left_active'] = 1
+    
+    # Shift active indicators to align with next trial's outcome
+    # new_df['right_outcome'] = new_df['right_active'].shift(-1)
+    # new_df['left_outcome'] = new_df['left_active'].shift(-1)
+    new_df['right_outcome'] = new_df['right_active']
+    new_df['left_outcome'] = new_df['left_active']
+    
+    # Calculate probability of right/left outcomes for each sequence pattern
     new_df['prob_right'] = new_df.groupby('sequence')['right_outcome'].transform('mean')
     new_df['prob_left'] = new_df.groupby('sequence')['left_outcome'].transform('mean')
-    #print(new_df[new_df['prob_left'] < 0.5])
-    #les probabilitats no surten complementàries
-    new_df['V_t'] = prob_rwd*(new_df['prob_right']- new_df['prob_left'])
-    #print(new_df['V_t'])
+    
+    # Compute value difference between right and left options
+    new_df['V_t'] = (new_df['prob_right'] - new_df['prob_left'])
+    #plot histogram of the V_t
+    if hist :
+        #count the different values and print them
+        print(new_df['V_t'].value_counts())
+        print(new_df['sequence'].value_counts())
+        plt.hist(new_df['V_t'], bins=100)
+        plt.show()
 
-    new_df['side_num'] = np.nan
-    new_df.loc[new_df['side'] == 'right', 'side_num'] = 1
-    #Vertechi I believe states that s(left) = -1 but the fit looks to be atrocious for that value
-    new_df.loc[new_df['side'] == 'left', 'side_num'] = 0
+    new_df = new_df.dropna(subset=['choice']).reset_index(drop=True)
+    new_df['choice_1'] = new_df.groupby('session')['choice'].shift(-1)
+    new_df.loc[(new_df['choice_1'] == 0), 'side_num'] = -1
+    new_df.loc[(new_df['choice_1'] == 1), 'side_num'] = 1
+    #return all but last bc it contanis a nan
     return new_df
+def manual_computation_v2(df: pd.DataFrame, p_SW: float, p_RWD: float, hist: bool) -> pd.DataFrame:
+    """
+    Compute V_t based on the recursive equations for R_t and the given parameters.
+    
+    Args:
+        df: Input DataFrame containing trial data
+        p_SW: Probability of switching from active to inactive state
+        p_RWD: Probability of reward in active state
+        p_RW0: Base probability parameter for V_t computation
+        
+    Returns:
+        DataFrame with computed V_t values and intermediate calculations
+    """
+    
+    # Reset index and create new working dataframe
+    df = df.reset_index(drop=True)
+    new_df = df.copy()
+    new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'right'), 'choice'] = 0
+    new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'left'), 'choice'] = 0
+    new_df.loc[(new_df['outcome_bool'] == 0) & (new_df['side'] == 'left'), 'choice'] = 1
+    new_df.loc[(new_df['outcome_bool'] == 1) & (new_df['side'] == 'right'), 'choice'] = 1
 
-def plot_all_mice_correct_inf_combined(df, figsize=(46.8, 33.1)):
+    # Prepare columns for side and choice tracking
+    new_df['choice_1'] = new_df.groupby('session')['choice'].shift(-1)
+    new_df['choice_2'] = new_df.groupby('session')['choice'].shift(-2)
+    new_df.loc[(new_df['choice_1'] == 0), 'side_num'] = -1
+    new_df.loc[(new_df['choice_1'] == 1), 'side_num'] = 1
+    
+    # Initialize variables for the recursive computation
+    new_df['R_t'] = 0.0
+    new_df['V_t'] = 0.0
+    new_df['same_site'] = (new_df['choice'] == new_df['choice_1']).astype(int)
+    new_df['same_site_2'] = (new_df['choice'] == new_df['choice_2']).astype(int)
+    
+    new_df.loc[0, 'same_site'] = 0  # First trial has no previous site
+    
+    # Compute rho parameter
+    rho = 1 / ((1 - p_SW) * (1 - p_RWD))
+    
+    # Iterate through trials to compute R_t and V_t
+    for t in range(len(new_df)):
+        if t == 0 or new_df.at[t, 'choice_1'] is None:
+            # First trial starts with R_t = 0
+            new_df.at[t, 'R_t'] = 0.0
+        else:
+            if new_df.at[t, 'outcome_bool']:
+                # Reward resets R_t to 0
+                new_df.at[t, 'R_t'] = 0.0
+            else:
+                if new_df.at[t, 'same_site']:
+                    # Same site: apply the recursive equation
+                    prev_R = new_df.at[t-1, 'R_t']
+                    new_df.at[t, 'R_t'] = rho * (prev_R + p_SW)
+                else:
+                    # This correspond to the unrewarded exploratory switches or returns to the side after that switch.
+                    #if it returns to the same site after a switch, we apply the recursive equation (not needed, the following covers it)
+                    # if t > 2 and new_df.at[t, 'same_site_2'] == 1:
+                    #     prev_R = new_df.at[t-2, 'R_t']
+                    #     new_df.at[t, 'R_t'] = rho * (prev_R + p_SW)
+                    #for unsuccessful exploratory switches, we apply the equation with the previous R_t using a marker (R_t cannot be equal)
+                    new_df.at[t, 'R_t'] = new_df.at[t-1, 'R_t']
+        
+        # Compute V_t from R_t
+        R_t = new_df.at[t, 'R_t']
+        if R_t == 0:
+            new_df.at[t, 'V_t'] = new_df.at[t, 'side_num'] * p_RWD
+        elif R_t == new_df.at[t-1, 'R_t']:
+            #after exploratory switch, we use the previous R_t and return to the rewarding side
+            new_df.at[t, 'V_t'] = - new_df.at[t, 'side_num'] * p_RWD
+        else:
+            new_df.at[t, 'V_t'] = p_RWD * (1 - 2 / (R_t**(-new_df.at[t, 'side_num']) + 1))
+        if new_df.at[t, 'V_t']  > 1:
+            print(f"Warning: V_t exceeds 1 at trial {t}: {new_df.at[t, 'V_t']}")
+    #plot histogram of V_t
+    if hist:
+        # Count the different values and print them
+        print(new_df['V_t'].value_counts())
+        plt.hist(new_df['V_t'], bins=100)
+        plt.show()
+    
+    return new_df[:-1]
+
+def plot_all_mice_correct_inf_combined(df, n_back, figsize=(46.8, 33.1)):
     """
     Plot ALL mice's correct inference weights in a SINGLE figure with:
     - Custom colors for coefficient types
@@ -162,6 +267,7 @@ def plot_all_mice_correct_inf_combined(df, figsize=(46.8, 33.1)):
     # Set your custom colors
     beta_color = '#d62728'  # Red for beta (V_t)
     side_color = '#1f77b4'  # Blue for side bias
+    intercept_color = '#2ca02c'  # Green for intercept
     
     # Set global styling for poster
     plt.rcParams.update({
@@ -183,60 +289,200 @@ def plot_all_mice_correct_inf_combined(df, figsize=(46.8, 33.1)):
     
     # Create alpha levels for mice (from light to dark)
     alphas = np.linspace(0.3, 1, n_mice)
-    
+    plus_pvalues_per_lag = []
+    minus_pvalues_per_lag = []
+    intercept_pvalues = []  # Store intercept p-values
+    GLM_data = []
+    all_metrics = []
+    v2 = 0
     # Plot each mouse's coefficients
     for i, mice in enumerate(mice_list):
         df_mice = df.loc[df['subject'] == mice]
-        
-        # Filter sessions with sufficient trials
-        session_counts = df_mice['session'].value_counts()
-        mask = df_mice['session'].isin(session_counts[session_counts > 50].index)
-        df_mice['sign_session'] = 0
-        df_mice.loc[mask, 'sign_session'] = 1
-        new_df_mice = df_mice[df_mice['sign_session'] == 1]
-        
-        # Compute values and fit model
-        df_values_new = manual_computation(new_df_mice, prob_switch, prob_rwd, n_back=3)
-        df_80, _ = select_train_sessions(df_values_new)
-        
-        try:
-            mM_logit = smf.logit(formula='choice ~ V_t + side_num', data=df_80).fit()
-        except Exception as e:
-            print(f"Model fitting failed for {mice}: {str(e)}")
-            continue  # Skip this mouse if model fails
+        hist = False
+        if n_back >5: hist = True
+        #if precomputed priors
+        #if inference like vertechi
+        if v2==1:
+            df_values_new = manual_computation_v2(df_mice, p_SW=0.01, p_RWD=0.8,hist=hist)
+        else:
+            df_values_new = manual_computation(df_mice, n_back= n_back,hist=hist)
+        df_cv = select_train_sessions(df_values_new)
+        cv_plus_pvalues_per_lag = []
+        cv_minus_pvalues_per_lag = []
+        cv_intercept_pvalues = []  # Store intercept p-values
 
-        # Create coefficients DataFrame
-        GLM_df = pd.DataFrame({
-            'coefficient': mM_logit.params,
-            'std_err': mM_logit.bse,
-            'z_value': mM_logit.tvalues,
-            'p_value': mM_logit.pvalues,
-            'conf_Interval_Low': mM_logit.conf_int()[0],
-            'conf_Interval_High': mM_logit.conf_int()[1],
-            'regressor': mM_logit.params.index
-        })
+        for i in range(5):
+            df_80 = df_cv[df_cv[f'split_{i}'] == f'train']
+            df_test = df_cv[df_cv[f'split_{i}'] == f'test']
+            try:
+                #model_0
+                if v2==2:
+                    mM_logit = smf.logit(formula='choice ~ side_num', data=df_80).fit()
+                else:
+                    mM_logit = smf.logit(formula='choice ~ V_t + side_num', data=df_80).fit()
+            except Exception as e:
+                print(f"Model fitting failed for {mice}: {str(e)}")
+                continue  # Skip this mouse if model fails
 
-        # Get coefficients
-        beta = GLM_df.loc[GLM_df['regressor'].str.contains('V_t'), 'coefficient'].values[0]
-        side = GLM_df.loc[GLM_df['regressor'].str.contains('side_num'), 'coefficient'].values[0]
-        
-        # Plot with your colors and mouse-specific alpha
-        ax.bar(i-0.2, beta, width=0.4, color=beta_color, alpha=alphas[i], label=f'{mice} β' if i == 0 else "")
-        ax.bar(i+0.2, side, width=0.4, color=side_color, alpha=alphas[i], label=f'{mice} side' if i == 0 else "")
+            # Create coefficients DataFrame
+            GLM_df = pd.DataFrame({
+                'coefficient': mM_logit.params,
+                'std_err': mM_logit.bse,
+                'z_value': mM_logit.tvalues,
+                'p_value': mM_logit.pvalues,
+                'conf_Interval_Low': mM_logit.conf_int()[0],
+                'conf_Interval_High': mM_logit.conf_int()[1],
+            })
+            GLM_df['subject'] = mice
+            GLM_df['split'] = i
+            df_reset = GLM_df.reset_index()
+            df_reset = df_reset.rename(columns={'index': 'regressor'})
+            GLM_data.append(df_reset)
+            df_test['pred_prob'] = mM_logit.predict(df_test)
+            n_regressors = 2
+            #Create a DataFrame with the avaluation metrics
+            y_true = (
+                df_test.groupby('session')['choice']
+                .apply(lambda x: x.iloc[n_regressors:-1])
+                .reset_index(drop=True)  # Flatten to a single Series
+            )  # True binary outcomes
+            predictions = []
+            for session, group in df_test.groupby('session'):
+                # Get predictions for this session only
+                session_pred = mM_logit.predict(group[:-1])[n_regressors:]
+                if(session_pred.isna().any()):
+                    print(np.where(session_pred.isna()))
+                predictions.append(session_pred)
+                
+            y_pred_prob = pd.concat(predictions)  # Predicted probabilities (change this tot the test set)
+            y_pred_class = (y_pred_prob >= 0.5).astype(int)
+            np.random.seed(42) 
+            y_pred_class_mult = (np.random.rand(len(y_pred_prob)) < y_pred_prob).astype(int) # We may use the multinomial here to choose with probability (sampling)
+
+            metrics_dict = {
+                # Log-likelihood
+                "log_likelihood": mM_logit.llf,
+                "log_likelihood_per_obs": mM_logit.llf / len(y_true),
+                
+                # Information criteria
+                "AIC": mM_logit.aic,
+                "BIC": mM_logit.bic,
+                
+                # Pseudo R-squared
+                "pseudo_r2_mcfadden": mM_logit.prsquared,  # McFadden's pseudo R²
+                "pseudo_r2_cox_snell": 1 - np.exp(-2 * (mM_logit.llf - mM_logit.llnull) / len(y_true)),  # Cox-Snell
+                "pseudo_r2_nagelkerke": (1 - np.exp(-2 * (mM_logit.llf - mM_logit.llnull) / len(y_true))) / 
+                                    (1 - np.exp(2 * mM_logit.llnull / len(y_true))),  # Nagelkerke
+                
+                # Classification metrics (threshold=0.5)
+                "accuracy": accuracy_score(y_true, y_pred_class),
+                "precision": precision_score(y_true, y_pred_class),
+                "recall": recall_score(y_true, y_pred_class),
+                "f1_score": f1_score(y_true, y_pred_class),
+                "accuracy_bis": accuracy_score(y_true, y_pred_class_mult),
+                "precision_bis": precision_score(y_true, y_pred_class_mult),
+                "recall_bis": recall_score(y_true, y_pred_class_mult),
+                "f1_score_bis": f1_score(y_true, y_pred_class_mult),
+                
+                # Probability-based metrics
+                "roc_auc": roc_auc_score(y_true, y_pred_prob),
+                "brier_score": brier_score_loss(y_true, y_pred_prob),
+            }
+            GLM_metrics = pd.DataFrame([metrics_dict])
+            GLM_metrics['subject'] = mice
+            GLM_metrics['split'] = i
+            all_metrics.append(GLM_metrics)
+            for i, reg in enumerate(mM_logit.params.index):
+                if 'V' in reg:
+                    cv_plus_pvalues_per_lag.append(mM_logit.pvalues[i])
+                elif 'side' in reg:
+                    cv_minus_pvalues_per_lag.append(mM_logit.pvalues[i])
+                elif reg == 'Intercept':
+                    cv_intercept_pvalues.append(mM_logit.pvalues[i])
+        plus_pvalues_per_lag.append(np.median(cv_plus_pvalues_per_lag))
+        minus_pvalues_per_lag.append(np.median(cv_minus_pvalues_per_lag))
+        intercept_pvalues.append(np.median(cv_intercept_pvalues))  
+
+    #if the path exists, remove it
+    if v2==1:
+        file_name = f'/home/marcaf/TFM(IDIBAPS)/codes/data/all_subjects_glm_metrics_inference_based_v2_{n_back}.csv'
+    elif v2==2:
+        file_name = f'/home/marcaf/TFM(IDIBAPS)/codes/data/all_subjects_glm_metrics_model_0_{n_back}.csv'
+    else:
+        file_name = f'/home/marcaf/TFM(IDIBAPS)/codes/data/all_subjects_glm_metrics_inference_based_{n_back}.csv'
+    if os.path.exists(file_name):
+        os.remove(file_name)
+    # Save combined GLM metrics to CSV
+    combined_glm_metrics = file_name
+    combined_metrics = pd.concat(all_metrics,ignore_index=True,axis=0)
+    combined_metrics.to_csv(combined_glm_metrics, index=False)
+    df_GLM_data = pd.concat(GLM_data)
+    df_GLM_data = df_GLM_data.reset_index(drop=True)
+    df_GLM_df = df_GLM_data.groupby(['regressor','subject'])['coefficient'].mean().reset_index()
+    df_GLM_data = pd.concat(GLM_data)
+    df_GLM_data = df_GLM_data.reset_index(drop=True)
+    df_GLM_df = df_GLM_data.groupby(['regressor'])['coefficient'].mean().reset_index()
+    fisher_plus = scipy.stats.combine_pvalues(plus_pvalues_per_lag, method='stouffer')[1]
+    fisher_minus = scipy.stats.combine_pvalues(minus_pvalues_per_lag, method='stouffer')[1]
     
+    # Combine intercept p-values
+    if intercept_pvalues:  # Only if intercepts were found
+        fisher_intercept = scipy.stats.combine_pvalues(intercept_pvalues, method='stouffer')[1]
+    
+    i = 1
+    y_max = ax.get_ylim()[1]
+    if v2 != 2:
+        beta = df_GLM_df.loc[df_GLM_df['regressor'].str.contains('V_t'), 'coefficient'].values[0]
+        ax.bar(i, beta, width=0.66, color=beta_color, alpha=1, label=f'β' if i == 0 else "")
+        p = fisher_plus
+        if p < 0.001:
+            ax.text(i, y_max * 0.95, '***', ha='center', fontsize=30, color=beta_color)
+        elif p < 0.01:
+            ax.text(i, y_max * 0.95, '**', ha='center', fontsize=30, color=beta_color)
+        elif p < 0.05:
+            ax.text(i, y_max * 0.95, '*', ha='center', fontsize=30, color=beta_color)
+        else:
+            ax.text(i, y_max * 0.95, 'ns', ha='center', fontsize=30, color=beta_color)
+    side = df_GLM_df.loc[df_GLM_df['regressor'].str.contains('side_num'), 'coefficient'].values[0]
+    intercept = df_GLM_df[(df_GLM_df['regressor'] == 'Intercept')]['coefficient'].values
+    ax.bar(i+0.67, side, width=0.66, color=side_color, alpha=1, label=f' side' if i == 0 else "")
+    # Add intercept bar
+    if intercept.size > 0:
+        ax.bar(0.33, intercept[0], width=0.66, color=intercept_color, alpha=1, label=f'{mice} Intercept' if i == 0 else "")
+    
+
+    p = fisher_minus
+    if p < 0.001:
+        ax.text(i + 0.67, y_max * 0.90, '***', ha='center', fontsize=30, color=side_color)
+    elif p < 0.01:
+        ax.text(i + 0.67, y_max * 0.90, '**', ha='center', fontsize=30, color=side_color)
+    elif p < 0.05:
+        ax.text(i + 0.67, y_max * 0.90, '*', ha='center', fontsize=30, color=side_color)
+    else:
+        ax.text(i + 0.67, y_max * 0.90, 'ns', ha='center', fontsize=30, color=side_color)
+    
+    # Add intercept significance (if applicable)
+    if intercept_pvalues:
+        if fisher_intercept < 0.001:
+            ax.text(0.33, y_max * 0.85, '***', ha='center', fontsize=25, color=intercept_color)
+        elif fisher_intercept < 0.01:
+            ax.text(0.33, y_max * 0.85, '**', ha='center', fontsize=25, color=intercept_color)
+        elif fisher_intercept < 0.05:
+            ax.text(0.33, y_max * 0.85, '*', ha='center', fontsize=25, color=intercept_color)
+        else:
+            ax.text(0.33, y_max * 0.85, 'ns', ha='center', fontsize=25, color=intercept_color)
     # Add reference line and styling
     ax.axhline(y=0, color='black', linestyle='-', linewidth=2)
-    ax.set_title('Combined Correct Inference Weights', pad=20)
-    ax.set_ylabel('Coefficient Value', labelpad=20)
-    ax.set_xticks(np.arange(n_mice))
-    ax.set_xticklabels(mice_list, rotation=45, ha='right')
     ax.grid(True, axis='y', linestyle=':', alpha=0.3)
+    #put the x-axis in blank
+    ax.set_xticks([])
     
     # Create simplified legends
     # Legend 1: Coefficient types with your colors
     coeff_handles = [
-        mpatches.Patch(color=beta_color, label='β (Value)'),
-        mpatches.Patch(color=side_color, label='Side Bias')
+        mpatches.Patch(color=beta_color, label=r'$\beta^V$'),
+        mpatches.Patch(color=side_color, label=r'$\beta^S$'),
+        mpatches.Patch(color=intercept_color, label='Intercept')
     ]
     legend1 = ax.legend(handles=coeff_handles, title='Coefficient Types',
                        loc='upper left', bbox_to_anchor=(1.01, 1))
@@ -245,9 +491,6 @@ def plot_all_mice_correct_inf_combined(df, figsize=(46.8, 33.1)):
     mice_handles = []
     for i, mice in enumerate(mice_list):
         mice_handles.append(mpatches.Patch(color='gray', alpha=alphas[i], label=mice))
-    
-    ax.legend(handles=mice_handles, title='Mice (by alpha)',
-             loc='lower left', bbox_to_anchor=(1.01, 0))
     
     # Add the first legend back
     ax.add_artist(legend1)
@@ -260,6 +503,9 @@ def plot_all_mice_correct_inf_combined(df, figsize=(46.8, 33.1)):
 
 def inference_plot(prob_switch,prob_rwd,df):
     mice_counter = 0
+    for j in [1,2,3,4,5]:
+        j = 3
+        plot_all_mice_correct_inf_combined(df,n_back=j, figsize=(46.8, 33.1))
     n_subjects = len(df['subject'].unique())
     avaluate= 0
     if not avaluate:
@@ -288,7 +534,6 @@ def inference_plot(prob_switch,prob_rwd,df):
                 ax.legend(loc='upper left')
                 mice_counter += 1
         plt.show()
-        plot_all_mice_correct_inf_combined(df, figsize=(46.8, 33.1))
     else:
         #this have been chosen to ensure enough bins result from the processing of the data
         n_back_vect = np.array([4,5,7,8])

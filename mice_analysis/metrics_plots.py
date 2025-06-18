@@ -8,207 +8,162 @@ import matplotlib.lines as mlines
 
 
 
-def plot_metrics_comparison(blocks, metrics_data, model_names):
-    """
-    Create separate plots for BIC and Accuracy with legends inside the plots
-    
-    Args:
-        blocks: Array of probability blocks (e.g., [[0.2,0.8], [0.3,0.7]])
-        metrics_data: Dictionary containing metrics for each model
-        model_names: List of model names (e.g., ['glm_prob_switch', 'glm_prob_r'])
-    """
-    # Create a consistent color palette
-    palette = sns.color_palette("husl", len(model_names))
-    
-    # Convert blocks to readable labels
-    block_labels = [p for p in blocks]
-    
-    # Set font sizes
-    title_fontsize = 50
-    label_fontsize = 50
-    legend_fontsize = 20  # Slightly smaller for inside placement
-    tick_fontsize = 25
-    
-    # Plot BIC
-    plt.figure(figsize=(10, 6))  # Slightly smaller for single plot
-    plot_metric(blocks, metrics_data, model_names, 'BIC', 'BIC', 
-               palette, block_labels, title_fontsize, label_fontsize, legend_fontsize, tick_fontsize)
-    plt.tight_layout()
-    plt.show()
-    
-    # Plot Accuracy
-    plt.figure(figsize=(10, 6))
-    plot_metric(blocks, metrics_data, model_names, 'accuracy', 'Accuracy', 
-               palette, block_labels, title_fontsize, label_fontsize, legend_fontsize, tick_fontsize)
-    plt.tight_layout()
-    plt.show()
-    
-    #Plot Log Likelihood
-    plt.figure(figsize=(10, 6))
-    plot_metric(blocks, metrics_data, model_names, 'log_likelihood_per_obs', 'Log Likelihood per Obs',
-               palette, block_labels, title_fontsize, label_fontsize, legend_fontsize, tick_fontsize)
-    plt.tight_layout()
-    plt.show()
-
-def plot_metric(blocks, metrics_data, model_names, metric, ylabel, 
-                palette, block_labels, title_fontsize, label_fontsize, legend_fontsize, tick_fontsize):
-    """Helper function to plot a single metric with internal legend"""
-    # Prepare data
-    plot_data = []
-    for model_idx, model in enumerate(model_names):
-        for block_idx, block in enumerate(blocks):
-            values = metrics_data[model][metric][block_idx]
-            for val in values:
-                plot_data.append({
-                    'Model': model,
-                    'Probability': block_labels[block_idx],
-                    'Value': val,
-                    'Color': palette[model_idx]
-                })
-    
-    df_plot = pd.DataFrame(plot_data)
-    
-    # Create plot
-    ax = plt.gca()
-    
-    # Create boxplot
-    sns.boxplot(
-        x='Probability', 
-        y='Value', 
-        hue='Model',
-        data=df_plot,
-        palette=palette,
-        width=0.6,
-        linewidth=1.5
-    )
-    
-    # Add individual data points
-    sns.stripplot(
-        x='Probability',
-        y='Value',
-        hue='Model',
-        data=df_plot,
-        dodge=True,
-        palette=palette,
-        alpha=0.5,
-        edgecolor='gray',
-        linewidth=0.5,
-        jitter=True,
-        size=4  # Slightly smaller points
-    )
-    
-    # Format plot
-    #ax.set_title(ylabel, fontsize=title_fontsize, pad=10)
-    ax.set_ylabel(ylabel, fontsize=label_fontsize)
-    ax.tick_params(axis='both', labelsize=tick_fontsize)
-    
-    # Customize legend - placed inside plot
-    handles, labels = ax.get_legend_handles_labels()
-    ax.legend(
-        handles, 
-        labels, 
-        title='Model',
-        fontsize=legend_fontsize,
-        title_fontsize=legend_fontsize,
-        loc='best',  # Changed to upper right inside
-        framealpha=1,
-        edgecolor='black'
-    )
-    
-    # Add grid and clean borders
-    ax.grid(True, alpha=0.2)
-    sns.despine(ax=ax)
-
 def plot_metrics_comparison_grouped_by_models(blocks, metrics_data, model_names):
     """
-    Create separate plots for BIC, Accuracy, and Log Likelihood grouped by models
+    Creates comparative visualizations of model performance metrics grouped by models.
+    Generates four separate plots for different evaluation metrics.
     
     Args:
-        blocks: Array of probability blocks (e.g., [[0.2,0.8], [0.3,0.7]])
-        metrics_data: Dictionary containing metrics for each model
-        model_names: List of model names (e.g., ['glm_prob_switch', 'glm_prob_r'])
+        blocks: List of probability blocks defining experimental conditions
+                (e.g., [[0.2,0.8], [0.3,0.7]] where each sublist represents reward probabilities)
+                
+        metrics_data: Nested dictionary containing evaluation metrics for each model
+                     Structure: {model_name: {metric_name: [values_across_blocks]}}
+                     
+        model_names: List of strings identifying models to compare
+                    (e.g., ['glm_prob_switch', 'glm_prob_r'])
+    
+    Plots Generated:
+    1. Log Likelihood
+    2. Number of Trials (n_trials)
+    3. BIC (Bayesian Information Criterion)
+    4. Log Likelihood per Observation
+    5. Accuracy
+    
+    Visualization Features:
+    - Consistent color scheme across all plots
+    - Large, readable fonts for presentations
+    - Automatic layout adjustment
+    - Model-grouped comparison
     """
-    # Create a consistent color palette
-    palette = sns.color_palette("husl", len(blocks)+2)
     
-    # Set font sizes
-    title_fontsize = 50
-    label_fontsize = 50
-    legend_fontsize = 20
-    tick_fontsize = 25
+    # Create color palette with 2 extra colors beyond what's needed for blocks
+    # (The +2 suggests anticipation of additional conditions)
+    palette = sns.color_palette("viridis", len(blocks)+2)
     
-    # Plot BIC
-    plt.figure(figsize=(10, 6))  # Slightly smaller for single plot
-    plot_metric_grouped_by_models(blocks, metrics_data, model_names, 'log_likelihood', 'log_likelihood',
-                                    palette, title_fontsize, label_fontsize, legend_fontsize, tick_fontsize)
-    plt.figure(figsize=(10, 6)) 
-    plot_metric_grouped_by_models(blocks, metrics_data, model_names, 'n_trials', 'n_trials',
-                                    palette, title_fontsize, label_fontsize, legend_fontsize, tick_fontsize)
+    # Set font sizes for publication-quality plots
+    title_fontsize = 50    # Large title size 
+    label_fontsize = 50    # Axis labels
+    legend_fontsize = 20   # Smaller to fit inside plot
+    tick_fontsize = 25     # Tick labels
+    
+    # Plot 1: Log Likelihood (raw)
     plt.figure(figsize=(10, 6))
-    plot_metric_grouped_by_models(blocks, metrics_data, model_names, 'BIC', 'BIC', 
-                                 palette, title_fontsize, label_fontsize, legend_fontsize, tick_fontsize)
+    plot_metric_grouped_by_models(
+        blocks, metrics_data, model_names, 
+        'log_likelihood', 'log_likelihood',
+        palette, title_fontsize, label_fontsize, 
+        legend_fontsize, tick_fontsize
+    )
+    
+    # Plot 2: Number of Trials
+    plt.figure(figsize=(10, 6))
+    plot_metric_grouped_by_models(
+        blocks, metrics_data, model_names,
+        'n_trials', 'n_trials',
+        palette, title_fontsize, label_fontsize,
+        legend_fontsize, tick_fontsize
+    )
+    
+    # Plot 3: BIC
+    plt.figure(figsize=(10, 6))
+    plot_metric_grouped_by_models(
+        blocks, metrics_data, model_names,
+        'BIC', 'BIC',
+        palette, title_fontsize, label_fontsize,
+        legend_fontsize, tick_fontsize
+    )
     plt.tight_layout()
     plt.show()
-    # Plot Log Likelihood
+    
+    # Plot 4: Normalized Log Likelihood
     plt.figure(figsize=(10, 6))
-    plot_metric_grouped_by_models(blocks, metrics_data, model_names, 'log_likelihood_per_obs', 'Log Likelihood per Obs',
-                                 palette, title_fontsize, label_fontsize, legend_fontsize, tick_fontsize)
-    plt.tight_layout()
-    plt.show()
-    # Plot Accuracy
-    plt.figure(figsize=(10, 6))
-    plot_metric_grouped_by_models(blocks, metrics_data, model_names, 'accuracy', 'Accuracy', 
-                                 palette, title_fontsize, label_fontsize, legend_fontsize, tick_fontsize)
+    plot_metric_grouped_by_models(
+        blocks, metrics_data, model_names,
+        'log_likelihood_per_obs', 'Log Likelihood per Obs',
+        palette, title_fontsize, label_fontsize,
+        legend_fontsize, tick_fontsize
+    )
     plt.tight_layout()
     plt.show()
     
+    # Plot 5: Accuracy
+    plt.figure(figsize=(10, 6))
+    plot_metric_grouped_by_models(
+        blocks, metrics_data, model_names,
+        'accuracy', 'Accuracy',
+        palette, title_fontsize, label_fontsize,
+        legend_fontsize, tick_fontsize
+    )
+    plt.tight_layout()
+    plt.show()
 
 
 def plot_metric_grouped_by_models(blocks, metrics_data, model_names, metric, ylabel, 
                                 palette, title_fontsize, label_fontsize, legend_fontsize, tick_fontsize):
-    """Helper function to plot a single metric grouped by models with internal legend"""
-    # Prepare data
+    """
+    Creates a grouped comparison plot for a specific metric across models and blocks.
+    
+    Args:
+        blocks: List of probability blocks/conditions (e.g., [[0.2,0.8], [0.3,0.7]])
+        metrics_data: Nested dictionary {model: {metric: [values_per_block]}}
+        model_names: List of model identifiers
+        metric: The specific metric to plot (key in metrics_data)
+        ylabel: Label for the y-axis
+        palette: Color palette for different blocks
+        title_fontsize: Font size for title (currently unused)
+        label_fontsize: Font size for axis labels
+        legend_fontsize: Font size for legend text
+        tick_fontsize: Font size for axis ticks
+    
+    Produces:
+        A boxplot with overlaid stripplots showing:
+        - X-axis: Different models
+        - Y-axis: Metric values
+        - Hue: Probability blocks/conditions
+        - Colors: Distinct for each block
+    """
+    
+    # ===== DATA PREPARATION =====
     plot_data = []
     for block_idx, block in enumerate(blocks):
         for model_idx, model in enumerate(model_names):
             values = metrics_data[model][metric][block_idx]
-            for val in values:
-                if (model != 'inference_based') and (block_idx == 3):
-                    plot_data.append({
-                        'Block': f'{block_idx+3}',
-                        'Model': model,
-                        'Value': val,
-                        'Color': palette[block_idx+2]
-                    })
-                elif (model != 'inference_based') and (block_idx == 4):
-                    plot_data.append({
-                        'Block': f'{block_idx+5}',
-                        'Model': model,
-                        'Value': val,
-                        'Color': palette[block_idx+2]
-                    })
-                elif model == 'model_0':
-                    plot_data.append({
-                        'Block': f'{block_idx+1}',
-                        'Model': model,
-                        'Value': val,
-                        'Color': palette[1]
-                    })
+            
+            # Special case handling for model-specific formatting
+            if model != 'inference_based':
+                if block_idx == 3:
+                    block_label = f'{block_idx+3}'
+                    color_idx = block_idx+2
+                elif block_idx == 4:
+                    block_label = f'{block_idx+5}'
+                    color_idx = block_idx+2
                 else:
-                    plot_data.append({
-                        'Block': f'{block_idx+1}',
-                        'Model': model,
-                        'Value': val,
-                        'Color': palette[block_idx]
-                    })
-                
+                    block_label = f'{block_idx+1}'
+                    color_idx = block_idx
+            elif model == 'model_0':
+                block_label = f'{block_idx+1}'
+                color_idx = 1
+            else:
+                block_label = f'{block_idx+1}'
+                color_idx = block_idx
+            
+            # Append all values for this block-model combination
+            for val in values:
+                plot_data.append({
+                    'Block': block_label,
+                    'Model': model,
+                    'Value': val,
+                    'Color': palette[color_idx]
+                })
     
     df_plot = pd.DataFrame(plot_data)
     
-    # Create plot
+    # ===== PLOT CREATION =====
+    plt.figure(figsize=(12, 8))  # Larger figure for better legend spacing
     ax = plt.gca()
     
-    # Create boxplot
+    # -- BOXPLOT --
     sns.boxplot(
         x='Model', 
         y='Value', 
@@ -216,11 +171,11 @@ def plot_metric_grouped_by_models(blocks, metrics_data, model_names, metric, yla
         data=df_plot,
         palette=palette,
         width=0.6,
-        linewidth=1.5
+        linewidth=1.5,
+        fliersize=3  # Size of outlier markers
     )
-    #put labels depending on the color using mpatches
-
-    # Add individual data points
+    
+    # -- STRIPPLOT --
     sns.stripplot(
         x='Model',
         y='Value',
@@ -231,121 +186,152 @@ def plot_metric_grouped_by_models(blocks, metrics_data, model_names, metric, yla
         alpha=0.5,
         edgecolor='gray',
         linewidth=0.5,
-        jitter=True,
+        jitter=0.2,  # Reduced jitter for better alignment
         size=4,
         legend=False
     )
     
-    # Format plot
+    # ===== PLOT FORMATTING =====
     ax.set_ylabel(ylabel, fontsize=label_fontsize)
     ax.set_xlabel('Model', fontsize=label_fontsize)
     ax.tick_params(axis='both', labelsize=tick_fontsize)
     
-    # Customize legend - placed inside plot
+    # Adjust x-tick labels if needed
+    ax.set_xticklabels([m.replace('_', ' ').title() for m in model_names])
+    
+    # ===== LEGEND CUSTOMIZATION =====
+    # Get unique handles/labels while preserving order
     handles, labels = ax.get_legend_handles_labels()
+    unique_handles = []
+    unique_labels = []
+    seen = set()
+    for h, l in zip(handles, labels):
+        if l not in seen:
+            seen.add(l)
+            unique_handles.append(h)
+            unique_labels.append(l)
+    
     ax.legend(
-        handles, 
-        labels, 
-        title='Trials_back',
+        unique_handles, 
+        unique_labels, 
+        title='Trials Back',
         fontsize=legend_fontsize,
         title_fontsize=legend_fontsize,
-        loc='upper left',          # Anchor point for the legend
-        bbox_to_anchor=(1.02, 1), 
+        loc='upper left',
+        bbox_to_anchor=(1.05, 1),  # Further right to prevent overlap
         framealpha=1,
         edgecolor='black'
     )
     
-    # Add grid and clean borders
-    ax.grid(True, alpha=0.2)
+    # ===== FINAL TOUCHES =====
+    plt.grid(True, alpha=0.2, linestyle='--')
     sns.despine(ax=ax)
+    plt.tight_layout()
 
 
 if __name__ == '__main__':
+    # ===== EXPERIMENT PARAMETERS =====
+    # Path and file configuration
     main_folder = '/home/marcaf/TFM(IDIBAPS)/rrns2/networks'
-    w_factor = 0.01
-    mean_ITI = 400
-    max_ITI = 800
-    fix_dur = 100
-    dec_dur = 100
-    blk_dur = 38
+    results_base = '/home/marcaf/TFM(IDIBAPS)/codes/data/all_subjects_glm_metrics_'
+    
+    # Timing parameters (currently unused in visualization)
+    timing_params = {
+        'w_factor': 0.01,
+        'mean_ITI': 400,
+        'max_ITI': 800,
+        'fix_dur': 100,
+        'dec_dur': 100,
+        'blk_dur': 38
+    }
+    
+    # Model configuration
     n_regressors = 4
     n_back = 3
-    blocks = np.array([
-        [0, 0.9],[0.2, 0.8],[0.3, 0.7],[0.4, 0.6]#,[2,2]
-    ])
-    blocks = np.array(['Mice'])
-    # Store metrics for each model
-    metrics_data = {
-        'glm_prob_switch': {
-            'log_likelihood_per_obs': [],
-            'log_likelihood': [],
-            'n_trials': [],
-            'BIC': [],
-            'AIC': [],
-            'accuracy': []
-        },
-        'glm_prob_r': {
-            'log_likelihood_per_obs': [],
-            'log_likelihood': [],
-            'n_trials': [],
-            'BIC': [],
-            'AIC': [],
-            'accuracy': []
-        },
-        'inference_based': {
-            'log_likelihood_per_obs': [],
-            'log_likelihood': [],
-            'n_trials': [],
-            'BIC': [],
-            'AIC': [],
-            'accuracy': []
-        },
-        # 'inference_based_v2': { 
-        #     'log_likelihood_per_obs': [],
-        #     'log_likelihood': [],
-        #     'n_trials': [],
-        #     'BIC': [],
-        #     'AIC': [],
-        #     'accuracy': []
-        # },
-        # 'model_0': {
-        #     'log_likelihood_per_obs': [],
-        #     'log_likelihood': [],
-        #     'n_trials': [],
-        #     'BIC': [],
-        #     'AIC': [],
-        #     'accuracy': []
-        # }
+    
+    # ===== DATA STRUCTURE INITIALIZATION =====
+    # Define models to analyze (comment/uncomment as needed)
+    models_to_analyze = [
+        'glm_prob_switch', 
+        'glm_prob_r', 
+        'inference_based'
+        # 'inference_based_v2',
+        # 'model_0'
+    ]
+    
+    # Block definitions for different model types
+    block_config = {
+        'standard_models': [2, 3, 4, 7, 10],    # For glm_prob_switch and glm_prob_r
+        'special_models': [1, 2, 3, 4, 5]       # For inference_based and variants
     }
-    for model in ['glm_prob_switch', 'glm_prob_r', 'inference_based']:# 'model_0','inference_based_v2']: #
-        if model == 'inference_based' or model == 'inference_based_v2' or model == 'model_0':
-            blocks = [1,2,3,4,5]
-        else:
-            blocks = [2,3,4,7,10]
-        for block in blocks:
-            folder = ('/home/marcaf/TFM(IDIBAPS)/codes/data/all_subjects_glm_metrics_') + model + f'_{block}.csv'
-            if os.path.exists(folder):
-                df = pd.read_csv(folder)
-                #To just plot one point for each seed, comment to see all cross-validation cases
-                df = df.groupby('subject').median()
-                # Store metrics
-                metrics_data[model]['log_likelihood_per_obs'].append(df['log_likelihood_per_obs'].values)
-                metrics_data[model]['log_likelihood'].append(df['log_likelihood'].values)
-                metrics_data[model]['n_trials'].append(df['log_likelihood'].values/df['log_likelihood_per_obs'].values)
-                metrics_data[model]['BIC'].append(df['BIC'].values)
-                metrics_data[model]['AIC'].append(df['AIC'].values)
-                metrics_data[model]['accuracy'].append(df['accuracy'].values)
-            else:
-                print(f"Metrics file not found: {folder}")
-                # Append empty arrays if data is missing
-                metrics_data[model]['log_likelihood_per_obs'].append(np.array([]))
-                metrics_data[model]['log_likelihood'].append(np.array([]))
-                metrics_data[model]['BIC'].append(np.array([]))
-                metrics_data[model]['AIC'].append(np.array([]))
-                metrics_data[model]['accuracy'].append(np.array([]))
+    
+    # Initialize metrics data structure
+    metrics_data = {
+        model: {
+            'log_likelihood_per_obs': [],
+            'log_likelihood': [],
+            'n_trials': [],
+            'BIC': [],
+            'AIC': [],
+            'accuracy': []
+        } 
+        for model in models_to_analyze
+    }
+    
+    # ===== DATA LOADING =====
+    for model in models_to_analyze:
+        # Determine which blocks to use for this model
+        blocks = block_config['special_models'] if model in ['inference_based', 'inference_based_v2', 'model_0'] else block_config['standard_models']
         
-        # Generate plots
-        # Combine data for plotting
-
-    plot_metrics_comparison_grouped_by_models(blocks, metrics_data, ['inference_based','glm_prob_switch', 'glm_prob_r'])#,'inference_based_v2','model_0']) #maybe add model_0
-    plot_metrics_comparison(blocks, metrics_data, ['glm_prob_switch', 'glm_prob_r', 'inference_based'])
+        for block in blocks:
+            file_path = f"{results_base}{model}_{block}.csv"
+            
+            if os.path.exists(file_path):
+                try:
+                    df = pd.read_csv(file_path)
+                    
+                    # Use median of each subject's results (comment out to see all data points)
+                    df = df.groupby('subject').median()
+                    
+                    # Store metrics
+                    metrics_data[model]['log_likelihood_per_obs'].append(df['log_likelihood_per_obs'].values)
+                    metrics_data[model]['log_likelihood'].append(df['log_likelihood'].values)
+                    
+                    # Calculate trials as likelihood / likelihood_per_obs
+                    with np.errstate(divide='ignore', invalid='ignore'):
+                        n_trials = np.where(
+                            df['log_likelihood_per_obs'] != 0,
+                            df['log_likelihood'] / df['log_likelihood_per_obs'],
+                            0
+                        )
+                    metrics_data[model]['n_trials'].append(n_trials)
+                    
+                    metrics_data[model]['BIC'].append(df['BIC'].values)
+                    metrics_data[model]['AIC'].append(df['AIC'].values)
+                    metrics_data[model]['accuracy'].append(df['accuracy'].values)
+                    
+                except Exception as e:
+                    print(f"Error processing {file_path}: {str(e)}")
+                    # Append empty array if processing fails
+                    for metric in metrics_data[model]:
+                        metrics_data[model][metric].append(np.array([]))
+            else:
+                print(f"Metrics file not found: {file_path}")
+                # Append empty arrays if file is missing
+                for metric in metrics_data[model]:
+                    metrics_data[model][metric].append(np.array([]))
+    
+    # ===== VISUALIZATION =====
+    # Define which models to plot (can be different from analysis set)
+    models_to_plot = ['inference_based', 'glm_prob_switch', 'glm_prob_r']
+    
+    # Generate comparative visualizations
+    try:
+        print("Generating grouped comparison plots...")
+        plot_metrics_comparison_grouped_by_models(
+            block_config['standard_models'],  # Using standard blocks for visualization
+            metrics_data, 
+            models_to_plot
+        )
+    except Exception as e:
+        print(f"Error generating plots: {str(e)}")

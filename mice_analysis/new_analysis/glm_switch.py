@@ -1,41 +1,30 @@
-
 import pandas as pd
 import numpy as np
 import scipy
 from typing import Tuple
-from datetime import timedelta
 from collections import defaultdict
 import matplotlib
 matplotlib.use('TkAgg') 
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-import seaborn as sns
-import matplotlib.ticker as ticker
-from scipy import stats
-from scipy.special import erf
-from scipy.optimize import curve_fit
-from matplotlib.backends.backend_pdf import PdfPages
-import matplotlib.dates as mdates
 import statsmodels.formula.api as smf
 import os
 import matplotlib.patches as mpatches
-from matplotlib import rcParams
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
-    roc_auc_score, brier_score_loss, confusion_matrix
+    roc_auc_score, brier_score_loss,
 )
 
 
 from extra_plotting import *
-from model_avaluation import *
-from parsing import parsing
+from parsing import *
 
 
 def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
     """
     Summary:
     This function processes the data needed to obtain the regressors and derives the 
-    formula for the glm
+    formula for the glm.
 
     Args:
         df ([Dataframe]): [dataframe with experimental data]
@@ -109,51 +98,19 @@ def obt_regressors(df,n) -> Tuple[pd.DataFrame, str]:
 
     return new_df, regressors_string
 
-def plot_GLM(ax, GLM_df, alpha=1):
-    """
-    Summary: In this function all the plotting of the glms is performed
-
-    Args:
-        ax ([type]): [description]
-        GLM_df ([type]): [description]
-        alpha (int, optional): [description]. Defaults to 1.
-    """
-    orders = np.arange(len(GLM_df))
-
-    # filter the DataFrame to separate the coefficients
-    rss_plus = GLM_df.loc[GLM_df.index.str.contains('rss_plus'), "coefficient"]
-    rss_minus = GLM_df.loc[GLM_df.index.str.contains('rss_minus'), "coefficient"]
-    rds_plus = GLM_df.loc[GLM_df.index.str.contains('rds_plus'), "coefficient"]
-    last_trial = GLM_df.loc[GLM_df.index.str.contains('last_trial'), "coefficient"]
-    # intercept = GLM_df.loc['Intercept', "coefficient"]
-    ax.plot(orders[:len(rss_plus)], rss_plus, marker='o', color='indianred', alpha=alpha)
-    ax.plot(orders[:len(rss_minus)], rss_minus, marker='o', color='teal', alpha=alpha)
-    ax.plot(orders[:len(rds_plus)], rds_plus, marker='o', color='red', alpha=alpha)
-    ax.plot(orders[:len(last_trial)], last_trial, marker='o', color='green', alpha=alpha)
-
-    # Create custom legend handles with labels and corresponding colors
-    legend_handles = [
-        mpatches.Patch(color='indianred', label='rss+'),
-        mpatches.Patch(color='teal', label='rss-'),
-        mpatches.Patch(color='red', label='rds+'),
-        mpatches.Patch(color='green', label='last_trial')
-    ]
-
-    # Add legend with custom handles
-    ax.legend(handles=legend_handles)
-    # ax.axhline(y=intercept, label='Intercept', color='black')
-    ax.axhline(y=0, color='gray', linestyle='--')
-
-    ax.set_ylabel('GLM weight')
-    ax.set_xlabel('Previous trials')
 
 def plot_all_mice_glm_combined(df, n_back, figsize=(46.8, 33.1)):
     """
     Plot ALL mice's GLM weights with significance testing using Fisher's method,
     including the intercept's combined p-value.
-    """
-    # Set colors and styling
     
+    Parameters:
+    - df: DataFrame containing the data
+    - n_back: Number of previous trials to consider
+    - figsize: Tuple specifying figure dimensions
+    """
+    
+    # Set plot styling parameters
     plt.rcParams.update({
         'axes.titlesize': 50,
         'axes.labelsize': 50,
@@ -164,39 +121,62 @@ def plot_all_mice_glm_combined(df, n_back, figsize=(46.8, 33.1)):
         'lines.markersize': 15
     })
 
+    # Create figure and axis
     fig, ax = plt.subplots(figsize=figsize)
+    
+    # Get unique mouse IDs, excluding 'A10'
     mice_list = np.unique(df['subject'])
     mice_list = mice_list[mice_list!= 'A10']
+    
+    # Create alpha values for fading effect across mice
     alphas = np.linspace(0.3, 1, len(mice_list))
-    rssp_color = '#d62728'
-    rds_color = '#ff7f0e'
-    rssm_color = '#1f77b4'
-    neutral_color = '#7f7f7f'
-    intercept_color = '#2ca02c'
-    # Initialize storage for p-values (one list per lag + intercept)
+    
+    # Define colors for different regressor types
+    rssp_color = '#d62728'  # Red for RSS+
+    rds_color = '#ff7f0e'   # Orange for RDS+
+    rssm_color = '#1f77b4'  # Blue for RSS-
+    neutral_color = '#7f7f7f'  # Gray for neutral
+    intercept_color = '#2ca02c'  # Green for intercept
+
+    # Initialize dictionaries to store p-values for each lag
     rssp_pvalues_per_lag = defaultdict(list)
     rssm_pvalues_per_lag = defaultdict(list)
     rdsp_pvalues_per_lag = defaultdict(list)
-    lt_pvalues = []
+    lt_pvalues = []  # For last trial p-values
     intercept_pvalues = []  # Store intercept p-values
+    
+    # Initialize lists to store GLM data and metrics
     GLM_data = []
-    # Collect p-values from each mouse
     all_metrics = []
+
+    # Process each mouse's data
     for mice in mice_list:
+        # Filter data for current mouse
         df_mice = df.loc[df['subject'] == mice]
+        
+        # Get regressors and prepare GLM data
         df_glm_mice, regressors_string = obt_regressors(df=df_mice, n=n_back)
-        #implement 5-fold cross-validation
+        
+        # Implement 5-fold cross-validation
         df_cv = select_train_sessions(df_glm_mice)
+        
+        # Initialize storage for CV p-values
         cv_rssp_pvalues_per_lag = defaultdict(list)
         cv_rssm_pvalues_per_lag = defaultdict(list)
         cv_rdsp_pvalues_per_lag = defaultdict(list)
-        cv_intercept_pvalues = []  # Store intercept p-values
+        cv_intercept_pvalues = []
         cv_lt = []
 
+        # Perform cross-validation
         for i in range(5):
+            # Split into train and test sets
             df_80 = df_cv[df_cv[f'split_{i}'] == f'train']
             df_test = df_cv[df_cv[f'split_{i}'] == f'test']
+            
+            # Fit GLM model
             mM_logit = smf.logit(formula='switch_num ~ ' + regressors_string, data=df_80).fit()
+            
+            # Store GLM coefficients and p-values
             GLM_df = pd.DataFrame({
                 'coefficient': mM_logit.params,
                 'p_value': mM_logit.pvalues
@@ -206,25 +186,30 @@ def plot_all_mice_glm_combined(df, n_back, figsize=(46.8, 33.1)):
             df_reset = GLM_df.reset_index()
             df_reset = df_reset.rename(columns={'index': 'regressor'})
             GLM_data.append(df_reset)
+            
+            # Make predictions on test set
             df_test['pred_prob'] = mM_logit.predict(df_test)
             n_regressors = len([x.strip() for x in regressors_string.split(' + ')])
-            #Create a DataFrame with the avaluation metrics
+            
+            # Prepare true labels and predictions for evaluation
             y_true = (
                 df_test.groupby('session')['switch_num']
                 .apply(lambda x: x.iloc[n_regressors:])
-                .reset_index(drop=True)  # Flatten to a single Series
-            )  # True binary outcomes
+                .reset_index(drop=True)
+            )
+            
+            # Get session-wise predictions
             predictions = []
             for session, group in df_test.groupby('session'):
-                # Get predictions for this session only
                 session_pred = mM_logit.predict(group)[n_regressors:]
                 predictions.append(session_pred)
                 
-            y_pred_prob = pd.concat(predictions)  # Predicted probabilities (change this tot the test set)
+            y_pred_prob = pd.concat(predictions)
             y_pred_class = (y_pred_prob >= 0.5).astype(int)
             np.random.seed(42) 
-            y_pred_class_mult = (np.random.rand(len(y_pred_prob)) < y_pred_prob).astype(int) # We may use the multinomial here to choose with probability (sampling)
+            y_pred_class_mult = (np.random.rand(len(y_pred_prob)) < y_pred_prob).astype(int)
 
+            # Calculate various evaluation metrics
             metrics_dict = {
                 # Log-likelihood
                 "log_likelihood": mM_logit.llf,
@@ -235,12 +220,12 @@ def plot_all_mice_glm_combined(df, n_back, figsize=(46.8, 33.1)):
                 "BIC": mM_logit.bic,
                 
                 # Pseudo R-squared
-                "pseudo_r2_mcfadden": mM_logit.prsquared,  # McFadden's pseudo R²
-                "pseudo_r2_cox_snell": 1 - np.exp(-2 * (mM_logit.llf - mM_logit.llnull) / len(y_true)),  # Cox-Snell
+                "pseudo_r2_mcfadden": mM_logit.prsquared,
+                "pseudo_r2_cox_snell": 1 - np.exp(-2 * (mM_logit.llf - mM_logit.llnull) / len(y_true)),
                 "pseudo_r2_nagelkerke": (1 - np.exp(-2 * (mM_logit.llf - mM_logit.llnull) / len(y_true))) / 
-                                    (1 - np.exp(2 * mM_logit.llnull / len(y_true))),  # Nagelkerke
+                                    (1 - np.exp(2 * mM_logit.llnull / len(y_true))),
                 
-                # Classification metrics (threshold=0.5)
+                # Classification metrics
                 "accuracy": accuracy_score(y_true, y_pred_class),
                 "precision": precision_score(y_true, y_pred_class),
                 "recall": recall_score(y_true, y_pred_class),
@@ -254,11 +239,14 @@ def plot_all_mice_glm_combined(df, n_back, figsize=(46.8, 33.1)):
                 "roc_auc": roc_auc_score(y_true, y_pred_prob),
                 "brier_score": brier_score_loss(y_true, y_pred_prob),
             }
+            
+            # Store metrics
             GLM_metrics = pd.DataFrame([metrics_dict])
             GLM_metrics['subject'] = mice
             GLM_metrics['split'] = i
             all_metrics.append(GLM_metrics)
-                        # Extract p-values for each regressor (including intercept)
+            
+            # Extract p-values for each regressor type
             for i, reg in enumerate(mM_logit.params.index):
                 if 'rss_plus' in reg:
                     lag = int(reg.split('plus')[-1])
@@ -274,8 +262,7 @@ def plot_all_mice_glm_combined(df, n_back, figsize=(46.8, 33.1)):
                 elif reg == 'last_trial':
                     cv_lt.append(mM_logit.pvalues[i])
 
-
-        # Combine p-values across CV folds using median for this mouse
+        # Combine p-values across CV folds using median
         for lag in cv_rssp_pvalues_per_lag:
             rssp_pvalues_per_lag[lag].append(np.median(cv_rssp_pvalues_per_lag[lag]))
         for lag in cv_rssm_pvalues_per_lag:
@@ -285,21 +272,20 @@ def plot_all_mice_glm_combined(df, n_back, figsize=(46.8, 33.1)):
         intercept_pvalues.append(np.median(cv_intercept_pvalues))
         lt_pvalues.append(np.median(cv_lt))    
 
-    #if the path exists, remove it
+    # Save metrics to CSV (remove existing file first)
     if os.path.exists(f'/home/marcaf/TFM(IDIBAPS)/codes/data/all_subjects_glm_metrics_glm_prob_switch_{n_back}.csv'):
         os.remove(f'/home/marcaf/TFM(IDIBAPS)/codes/data/all_subjects_glm_metrics_glm_prob_switch_{n_back}.csv')
-    # Save combined GLM metrics to CSV
+    
     combined_glm_metrics = f'/home/marcaf/TFM(IDIBAPS)/codes/data/all_subjects_glm_metrics_glm_prob_switch_{n_back}.csv'
     combined_metrics = pd.concat(all_metrics,ignore_index=True,axis=0)
     combined_metrics.to_csv(combined_glm_metrics, index=False)
-    df_GLM_data = pd.concat(GLM_data)
-    df_GLM_data = df_GLM_data.reset_index(drop=True)
-    df_GLM_df = df_GLM_data.groupby(['regressor','subject'])['coefficient'].mean().reset_index()    
     
+    # Process GLM data to get mean coefficients per regressor per subject
     df_GLM_data = pd.concat(GLM_data)
     df_GLM_data = df_GLM_data.reset_index(drop=True)
     df_GLM_df = df_GLM_data.groupby(['subject','regressor'])['coefficient'].mean().reset_index()
-    # Combine p-values using Stuffer's method for each lag and intercept
+    
+    # Combine p-values across mice using Fisher's method
     fisher_rssp = {}
     fisher_rssm = {}
     fisher_rdsp = {}
@@ -310,35 +296,36 @@ def plot_all_mice_glm_combined(df, n_back, figsize=(46.8, 33.1)):
     for lag in rdsp_pvalues_per_lag:
         fisher_rdsp[lag] = scipy.stats.combine_pvalues(rdsp_pvalues_per_lag[lag], method='fisher')[1]
     
-    # Combine intercept p-values
-    if intercept_pvalues:  # Only if intercepts were found
+    # Combine intercept and last trial p-values
+    if intercept_pvalues:
         fisher_intercept = scipy.stats.combine_pvalues(intercept_pvalues, method='fisher')[1]
-
-    if lt_pvalues:  # Only if last trial p-values were found
+    if lt_pvalues:
         fisher_lt = scipy.stats.combine_pvalues(lt_pvalues, method='fisher')[1]
     
+    # Plot coefficients for each mouse
     for i, mice in enumerate(mice_list):
+        # Get coefficients for each regressor type
         rss_plus = df_GLM_df[df_GLM_df['regressor'].str.contains('rss_plus') & (df_GLM_df['subject'] == mice)]['coefficient'].values
         rds_plus = df_GLM_df[df_GLM_df['regressor'].str.contains('rds_plus') & (df_GLM_df['subject'] == mice)]['coefficient'].values
         rss_minus = df_GLM_df[df_GLM_df['regressor'].str.contains('rss_minus') & (df_GLM_df['subject'] == mice)]['coefficient'].values
-        #Put the first coefficient the last
+        
+        # Reorder coefficients (move first to last)
         rss_plus = np.append(rss_plus[1:], rss_plus[0])
         rds_plus = np.append(rds_plus[1:], rds_plus[0])
         rss_minus = np.append(rss_minus[1:], rss_minus[0])
 
+        # Get intercept and last trial coefficients
         intercept = df_GLM_df[(df_GLM_df['regressor'] == 'Intercept') & (df_GLM_df['subject'] == mice)]['coefficient'].values
         last_trial = df_GLM_df[(df_GLM_df['regressor'] == 'last_trial') & (df_GLM_df['subject'] == mice)]['coefficient'].values
+        
+        # Plot coefficients with appropriate markers and colors
         ax.plot(np.arange(len(rss_plus))+2, rss_plus, 'o-', color=rssp_color,label = mice, alpha=alphas[i])
         ax.plot(np.arange(len(rss_minus))+2, rss_minus, 's--', color=rssm_color, label = mice, alpha=alphas[i])
         ax.plot(np.arange(len(rds_plus))+2, rds_plus, 'o--', color=rds_color, label = mice, alpha=alphas[i])
-
-        # Plot intercept
         ax.plot(0, intercept, 'o-', color=intercept_color,label = mice, alpha=alphas[i])
-        # Plot last trial
         ax.plot(1, last_trial, 'o-', color=neutral_color,label = mice, alpha=alphas[i])  
 
-    
-    # Add significance markers for lags (same as before)
+    # Add significance markers for each lag
     y_max = ax.get_ylim()[1]
     for lag in sorted(fisher_rssp.keys()):
         p = fisher_rssp[lag]
@@ -351,6 +338,7 @@ def plot_all_mice_glm_combined(df, n_back, figsize=(46.8, 33.1)):
         else:
             ax.text(lag, y_max * 0.95, 'ns', ha='center', fontsize=30, color=rssp_color)
     
+    # Repeat for other regressor types
     for lag in sorted(fisher_rssm.keys()):
         p = fisher_rssm[lag]
         if p < 0.001:
@@ -373,7 +361,7 @@ def plot_all_mice_glm_combined(df, n_back, figsize=(46.8, 33.1)):
         else:
             ax.text(lag, y_max * 0.75, 'ns', ha='center', fontsize=30, color=rds_color)
     
-    # Add intercept significance (if applicable)
+    # Add significance markers for intercept and last trial
     if intercept_pvalues:
         if fisher_intercept < 0.001:
             ax.text(0, y_max * 0.80, '***', ha='center', fontsize=25, color=intercept_color)
@@ -393,11 +381,13 @@ def plot_all_mice_glm_combined(df, n_back, figsize=(46.8, 33.1)):
         else:
             ax.text(1, y_max * 0.75, 'ns', ha='center', fontsize=25, color=neutral_color)   
     
-    # Add reference line, labels, and legends
+    # Final plot formatting
     ax.axhline(y=0, color='black', linestyle='--', linewidth=3, alpha=0.5)
     ax.set_ylabel('GLM Weight', labelpad=20)
     ax.set_xlabel('Previous Trials', labelpad=20)
     ax.grid(True, linestyle=':', alpha=0.3)
+    
+    # Create custom legend
     plt.legend(
         handles=[
             Line2D([0], [0], marker='o', color='w', label=r'$\beta_{t}^+$', markerfacecolor=rssp_color, markersize=10),
@@ -408,103 +398,208 @@ def plot_all_mice_glm_combined(df, n_back, figsize=(46.8, 33.1)):
         ],
         loc='lower right', fontsize=20, framealpha=0.5, edgecolor='black', facecolor='white'
     )
-    # Make legend frame visible 
+    
+    # Format legend frame
     legend = ax.get_legend()
     legend.get_frame().set_linewidth(2)
     legend.get_frame().set_edgecolor('black')
     legend.get_frame().set_facecolor('white')
+    
+    # Final adjustments and display
     plt.tight_layout()
     plt.show()
 
 def glm(df):
-    mice_counter = 0
+    """
+    Plot inference model results either combined across all mice or separately for each mouse.
+    Performs logistic regression with cross-validation for each mouse and visualizes coefficients.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        Input dataframe containing behavioral data for all mice with columns:
+        - subject: mouse identifier
+        - session: session identifier
+        - switch_num: dependent variable (binary)
+        - other regressor columns
+        
+    Returns:
+    --------
+    None (displays plot with subplots for each mouse)
+    """
+    # Calculate subplot layout (2 rows x n_cols columns)
     n_subjects = len(df['subject'].unique())
-    avaluate = 0
-    for j in [2,3,4,7,10]:
-        j = 10
-        plot_all_mice_glm_combined(df,n_back = j, figsize=(46.8, 33.1))
-    if not avaluate:
-        n_cols = int(np.ceil(n_subjects / 2))
-        f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
-        f1, axes1 = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
-        # iterate over mice
-        for mice in df['subject'].unique():
-            if mice != 'A10':
-                print(mice)
-                df_mice = df.loc[df['subject'] == mice]
-                # fit glm ignoring iti values
-                #df_mice['iti_bins'] = pd.cut(df_mice['iti_duration'], iti_bins)
-                #print(df_mice['subject'])
-                df_glm_mice, regressors_string = obt_regressors(df=df_mice,n = 10)
-                df_80, df_20 = select_train_sessions(df_glm_mice)
-                mM_logit = smf.logit(formula='switch_num ~ ' + regressors_string, data=df_80).fit()
-                print(regressors_string)     
+    n_cols = int(np.ceil(n_subjects / 2))  # Ensure enough columns for all mice
+    
+    # Create figure with dynamic sizing based on number of mice
+    f, axes = plt.subplots(2, n_cols, figsize=(5*n_cols-1, 8), sharey=True)
+    mice_counter = 0  # Counter to track mouse position in subplot grid
+    
+    # Color scheme for different regressor types
+    regressor_colors = {
+        'Intercept': '#2ca02c',  # Green for intercept
+        'rss_plus': '#d62728',   # Red for RSS+ 
+        'rss_minus': '#1f77b4',  # Blue for RSS-
+        'rds_plus': '#ff7f0e',   # Orange for RDS+
+    }
+    
+    # Storage for aggregated results across all mice
+    all_results = []
+    
+    # Process each mouse individually
+    for mice in df['subject'].unique():
+        if mice != 'A10':  # Exclude specific mouse if needed
+            # Filter data for current mouse
+            df_mice = df.loc[df['subject'] == mice]
+            
+            # Filter sessions - only keep those with >50 trials
+            session_counts = df_mice['session'].value_counts()
+            mask = df_mice['session'].isin(session_counts[session_counts > 50].index)
+            df_mice['sign_session'] = 0  # Initialize flag column
+            df_mice.loc[mask, 'sign_session'] = 1  # Mark valid sessions
+            new_df_mice = df_mice[df_mice['sign_session'] == 1]  # Filter to valid sessions
+            print(f"Processing mouse: {mice}")
+            
+            # Set number of previous trials to consider (could be parameterized)
+            n_back = 10  # Using 10 previous trials for analysis
+            
+            # Compute inference values and select training sessions
+            df_values_new, regressor_string = obt_regressors(new_df_mice, n_back)
+            df_cv = select_train_sessions(df_values_new)
+            
+            # Get current subplot axis based on mouse counter
+            ax = axes[mice_counter//n_cols, mice_counter%n_cols]
+            
+            GLM_data = []  # Store GLM results across all CV splits
+            
+            # Perform 5-fold cross-validation
+            for i in range(5):  
+                # Split data into train (80%) and test (20%) sets
+                df_80 = df_cv[df_cv[f'split_{i}'] == f'train']
+                df_test = df_cv[df_cv[f'split_{i}'] == f'test']
+                
+                # Fit logistic regression model
+                mM_logit = smf.logit(formula='switch_num ~ ' + regressor_string, 
+                                    data=df_80).fit(disp=0)  # Suppress output
+                
+                # Store model results in DataFrame
                 GLM_df = pd.DataFrame({
-                    'coefficient': mM_logit.params,
-                    'std_err': mM_logit.bse,
-                    'z_value': mM_logit.tvalues,
-                    'p_value': mM_logit.pvalues,
-                    'conf_Interval_Low': mM_logit.conf_int()[0],
-                    'conf_Interval_High': mM_logit.conf_int()[1]
+                    'coefficient': mM_logit.params,        # Regression coefficients
+                    'std_err': mM_logit.bse,              # Standard errors
+                    'z_value': mM_logit.tvalues,          # Z-scores
+                    'p_value': mM_logit.pvalues,          # P-values
+                    'conf_interval_low': mM_logit.conf_int()[0],  # CI lower bound
+                    'conf_interval_high': mM_logit.conf_int()[1], # CI upper bound
                 })
-                # subplot title with name of mouse
-                ax = axes[mice_counter//n_cols, mice_counter%n_cols]
-                ax1 = axes1[mice_counter//n_cols, mice_counter%n_cols]
-
-                ax.set_title(f'GLM weights: {mice}')
-                ax1.set_title(f'Psychometric Function: {mice}')
-                plot_GLM(ax, GLM_df)
-                #data_label can be either 'choice_num' or 'probability_r'
-                psychometric_data(ax1, df_20, GLM_df, regressors_string,'switch_num')
-                ax1.axhline(0.5, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
-                ax1.axvline(0, color='grey', linestyle='--', linewidth=1.5, alpha=0.7)
-                ax1.set_xlabel('Evidence')
-                ax1.set_ylabel('Prob of switching')
-                ax1.legend(loc='upper left')
-                mice_counter += 1
-        plt.tight_layout()
-        plt.show()
-    else:
-        unique_subjects = df['subject'][df['subject'] != 'A10'].unique()
-        n_back_vect = [2,3,5,7,10,15]
-        errors = np.zeros((len(unique_subjects),len(n_back_vect)))
-        #vector wit the trials back we are considering (the memory of the mice)
-        phi = 1
-        for i in range(len(n_back_vect)):
-            mice_counter = 0
-            for mice in unique_subjects:
-                df_mice = df.loc[df['subject'] == mice]
-                session_counts = df_mice['session'].value_counts()
-                mask = df_mice['session'].isin(session_counts[session_counts > 50].index)
-                df_mice['sign_session'] = 0
-                df_mice.loc[mask, 'sign_session'] = 1
-                new_df_mice = df_mice[df_mice['sign_session'] == 1]
-                df_glm_mice, regressors_string = obt_regressors(df=new_df_mice,n = n_back_vect[i])
-                df_80, df_20 = select_train_sessions(df_glm_mice)
-                mM_logit = smf.logit(formula='switch_num ~ ' + regressors_string, data=df_80).fit()
-                GLM_df = pd.DataFrame({
-                    'coefficient': mM_logit.params,
-                    'std_err': mM_logit.bse,
-                    'z_value': mM_logit.tvalues,
-                    'p_value': mM_logit.pvalues,
-                    'conf_Interval_Low': mM_logit.conf_int()[0],
-                    'conf_Interval_High': mM_logit.conf_int()[1]
+                # Add metadata
+                GLM_df['subject'] = mice
+                GLM_df['split'] = i
+                GLM_df = GLM_df.reset_index().rename(columns={'index': 'regressor'})
+                GLM_data.append(GLM_df)
+                
+                # Store predictions on test set
+                df_test['pred_prob'] = mM_logit.predict(df_test)
+            
+            # Combine results across all CV splits for this mouse
+            df_GLM_data = pd.concat(GLM_data).reset_index(drop=True)
+            
+            # Calculate median coefficients and p-values across splits (robust to outliers)
+            median_results = df_GLM_data.groupby('regressor').agg({
+                'coefficient': 'median',
+                'p_value': 'median'
+            }).reset_index()
+            
+            # Set subplot title and reference line at y=0
+            ax.set_title(f'Mouse {mice}', fontsize=12)
+            ax.axhline(0, color='gray', linestyle='--', alpha=0.5)
+            
+            # Get y-axis limits for proper significance marker placement
+            y_min, y_max = ax.get_ylim()
+            sig_height = y_max * 0.95  # Position for significance markers
+            
+            # Initialize list for x-tick positions
+            x_ticks_vect = []
+            
+            # Plot each regressor's coefficient
+            for i, (_, row) in enumerate(median_results.iterrows()):
+                reg = row['regressor']
+                coef = row['coefficient']
+                pval = row['p_value']
+                
+                # Determine color based on regressor type
+                if 'rss_plus' in reg:
+                    color = regressor_colors.get('rss_plus', '#d62728')  # Red
+                elif 'rss_minus' in reg:
+                    color = regressor_colors.get('rss_minus', '#1f77b4')  # Blue
+                elif 'rds_plus' in reg:
+                    color = regressor_colors.get('rds_plus', '#ff7f0e')  # Orange
+                elif 'Intercept' in reg:
+                    color = regressor_colors.get('Intercept', '#2ca02c')  # Green
+                else:
+                    color = '#7f7f7f'  # Gray for other regressors
+                
+                # Adjust x-position based on regressor type
+                if '10' in reg:  # Special handling for lag 10
+                    i += 8
+                elif ('Intercept' in reg) or ('last_trial' in reg):
+                    i = i  # Keep position for intercept and last trial
+                else:
+                    i -= 1  # Adjust position for other lags
+                
+                # Determine x-tick label based on regressor type
+                if 'last_trial' in reg:
+                    j = 1
+                elif 'Intercept' in reg:
+                    j = 0
+                # Extract numeric lag value from regressor name
+                elif 'rss_plus' in reg:
+                    j = int(reg.split('plus')[-1])
+                elif 'rss_minus' in reg:
+                    j = int(reg.split('minus')[-1])
+                elif 'rds_plus' in reg:
+                    j = int(reg.split('plus')[-1])
+                
+                # Adjust x-tick positions for better visualization
+                if j == 10:
+                    j = 2  # Special case for lag 10
+                elif j > 1:
+                    j += 1  # Shift other lags
+                
+                x_ticks_vect.append(j)  # Store x-tick position
+                
+                # Plot coefficient as a point
+                ax.plot(i, coef, 'o', markersize=6, color=color, alpha=0.8)
+                
+                # Add significance marker above point
+                if pval < 0.001:
+                    sig_marker = '***'
+                elif pval < 0.01:
+                    sig_marker = '**'
+                elif pval < 0.05:
+                    sig_marker = '*'
+                else:
+                    sig_marker = 'ns'
+                
+                ax.text(i, sig_height, sig_marker, ha='center', fontsize=10, color=color)
+                
+                # Store results for potential population-level analysis
+                all_results.append({
+                    'subject': mice,
+                    'regressor': reg,
+                    'coefficient': coef,
+                    'p_value': pval
                 })
-                errors[mice_counter][i]  = avaluation(GLM_df,df_80,regressors_string,'switch_num')
-                mice_counter += 1
-            print(errors)
-            print('phi=', phi)
-            print(errors[:,i])
-            plt.plot(range(0, len(unique_subjects)), errors[:,i], color='blue',marker='o',label = f'n = {n_back_vect[i]}', alpha = phi)
-            plt.xticks(range(0, len(unique_subjects)), unique_subjects)
-            phi = phi - 1/(len(n_back_vect))
-        plt.xlabel('Mice')
-        plt.ylabel('Error')
-        plt.title('Weighed error of the switch logistic model')
-        plt.legend(loc='upper right')
-        plt.grid(True)
-        plt.show()
+            
+            # Configure subplot labels and ticks
+            ax.set_xlabel('Regressor', fontsize=10)
+            ax.set_ylabel('Coefficient', fontsize=10)
+            ax.set_xticks(range(len(median_results)))
+            ax.set_xticklabels(x_ticks_vect)  # Use custom x-tick labels
+            mice_counter += 1  # Move to next subplot position
 
+    # Adjust layout to prevent overlapping and display plot
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == '__main__':
     data_path = '/home/marcaf/TFM(IDIBAPS)/codes/data/global_trials1.csv'
@@ -514,3 +609,14 @@ if __name__ == '__main__':
     trained = 1
     new_df = parsing(df,trained,0)
     glm(new_df)
+    # Flag to control whether to plot mice separately or combined
+    separate_mice = True
+    # Combined plot for all mice
+    if not separate_mice:
+        n_subjects = len(df['subject'].unique())
+        for j in [2,3,4,7,10]:
+            plot_all_mice_glm_combined(new_df,n_back = j, figsize=(46.8, 33.1))
+        
+    # Individual plots for each mouse
+    if separate_mice:
+        glm(new_df)

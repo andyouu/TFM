@@ -148,6 +148,104 @@ The script (`metrics_plots.py`) is designed to load previously stored model perf
 
 Font sizes and figure dimensions are optimized for presentations but can be adjusted in the function parameters.
 
+##GLM-Switch
+###Script Overview
+
+The script (`glm_switch.py`) processes behavioral data from a CSV file and includes functions to compute switch-related regressors, fit GLMs, and generate plots to visualize model coefficients. The main functions are:
+
+#### `obt_regressors`
+
+- **Purpose**: Processes trial-by-trial behavioral data to compute regressors for the GLM and generates the regression formula.
+- **Inputs**:
+  - `df`: DataFrame with columns like `session`, `outcome`, `side`, `iti_duration`, `probability_r`.
+  - `n`: Number of previous trials to consider (`n_back`).
+- **Features**:
+  - Filters sessions with >50 trials.
+  - Encodes choices (`left`, `right`, `other`) based on `outcome` and `side`.
+  - Computes `switch_num` (0=same choice as previous trial, 1=different).
+  - Creates `last_trial` regressor (reward outcome of the previous trial).
+  - Builds regressors for past trials (2 to `n`):
+    - `rss_plus{i}`: 1 if same choice as previous trial and rewarded at lag `i`.
+    - `rss_minus{i}`: 1 if same choice as previous trial and unrewarded at lag `i`.
+    - `rds_plus{i}`: 1 if different choice from previous trial and rewarded at lag `i`.
+  - Constructs the GLM formula string (e.g., `rss_plus2 + rss_minus2 + rds_plus2 + last_trial`).
+- **Returns**:
+  - Processed DataFrame with regressors.
+  - Regression formula string.
+  
+#### `plot_all_mice_glm_combined`
+
+- **Purpose**: Creates a single plot showing GLM coefficients for all mice, optimized for A0 poster presentation.
+- **Inputs**:
+  - `df`: DataFrame with behavioral data.
+  - `n_back`: Number of previous trials to consider.
+  - `figsize`: Figure size (default: A0 poster size, 46.8x33.1 inches).
+- **Features**:
+  - Excludes mouse 'A10'.
+  - Uses 5-fold cross-validation to fit logistic regression models (`switch_num ~ regressors`).
+  - Computes coefficients, p-values, and evaluation metrics (log-likelihood, AIC, BIC, pseudo R-squared, accuracy, precision, recall, F1, ROC AUC, Brier score).
+  - Saves metrics to a CSV file (`all_subjects_glm_metrics_glm_prob_switch_{n_back}.csv`).
+  - Plots coefficients for:
+    - `rss_plus` (red, solid line with circles).
+    - `rss_minus` (blue, dashed line with squares).
+    - `rds_plus` (orange, dashed line with circles).
+    - `last_trial` (gray, circle).
+    - `Intercept` (green, circle).
+  - Uses an alpha gradient to differentiate mice.
+  - Adds significance markers (`***`, `**`, `*`, `ns`) based on Fisher’s combined p-values across mice.
+  - Includes a custom legend with regressor types and a grid for readability.
+  - Optimized for posters with large fonts and thick lines.
+  
+#### `glm`
+
+- **Purpose**: Plots GLM coefficients either combined across all mice or separately for each mouse, focusing on switch behavior.
+- **Inputs**:
+  - `df`: DataFrame with behavioral data.
+- **Features**:
+  - Creates a subplot grid (2 rows, dynamic columns) for individual mice.
+  - Filters sessions with >50 trials.
+  - Uses `obt_regressors` with `n_back=10` to compute regressors.
+  - Fits logistic regression (`switch_num ~ regressors`) for each mouse using 5-fold cross-validation.
+  - Plots median coefficients for:
+    - `Intercept` (green).
+    - `rss_plus` (red).
+    - `rss_minus` (blue).
+    - `rds_plus` (orange).
+    - Other regressors (gray).
+  - Adds significance markers (`***`, `**`, `*`, `ns`) based on median p-values.
+  - Adjusts x-tick positions and labels for clarity (e.g., special handling for lag 10).
+  - Shares y-axis across subplots for consistency.
+  - Optimized for readability with dynamic subplot sizing.
+  
+#### Main Execution
+
+- **Data Loading**:
+  - Reads `global_trials1.csv` with `;` separator, specifying `iti_duration` as float.
+  - Prints unique tasks for reference.
+- **Data Preprocessing**:
+  - Applies a custom `parsing` function for trained mice (`trained=1`, `opto_yes=0`).
+- **Visualization**:
+  - Defaults to separate plots for each mouse (`separate_mice=True`) by calling `glm`.
+  - Optionally generates combined plots for all mice with varying `n_back` values ([2,3,4,7,10]) if `separate_mice=False`.
+  
+### Usage
+
+1. Ensure the required CSV file (`global_trials1.csv`) is available at the specified path.
+2. Verify that the `extra_plotting`, `model_avaluation`, and `parsing` modules are accessible.
+3. Update the `data_path` variable if needed.
+4. The script will generate and display:
+   - A subplot grid with GLM coefficients for each mouse (default, `separate_mice=True`).
+   - Optionally, A0-sized combined plots for all mice with different `n_back` values (if `separate_mice=False`).
+   
+### Notes
+
+- The script assumes a specific CSV structure with columns like `subject`, `session`, `outcome`, `side`, `iti_duration`, `probability_r`, and `task`.
+- The `parsing` and `select_train_sessions` functions are not provided; they must handle data filtering and cross-validation split creation.
+- The `n_back=10` is hardcoded in `glm`; adjust as needed.
+- Visualization parameters (e.g., font sizes, figure dimensions) are optimized for presentations/posters but can be modified in `plt.rcParams` or function arguments.
+- The script excludes mouse 'A10' and sessions with ≤50 trials.
+- Metrics are saved to a CSV file, overwriting any existing file with the same name.
+
 ##Inference-Based Script
 ### Script Overview
 

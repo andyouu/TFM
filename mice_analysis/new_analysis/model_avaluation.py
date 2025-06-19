@@ -19,41 +19,6 @@ import matplotlib.patches as mpatches
 from extra_plotting import *
 
 
-def select_train_sessions(df):
-    # Set random seed for reproducibility
-    np.random.seed(42)
-    
-    # Get unique sessions and shuffle them
-    unique_sessions = df['session'].unique()
-    np.random.shuffle(unique_sessions)
-    
-    # Calculate fold sizes
-    n_sessions = len(unique_sessions)
-    fold_size = n_sessions // 5
-    remainder = n_sessions % 5
-    
-    # Initialize all split columns
-    for i in range(5):
-        df[f'split_{i}'] = 'train'  # Default all to train
-    
-    # Create 5 folds
-    start = 0
-    for fold in range(5):
-        # Calculate test session indices for this fold
-        end = start + fold_size
-        if fold < remainder:  # Distribute remainder sessions across first folds
-            end += 1
-        
-        # Get test sessions for this fold
-        test_sessions = unique_sessions[start:end]
-        
-        # Mark these sessions as test in the current split
-        df.loc[df['session'].isin(test_sessions), f'split_{fold}'] = 'test'
-        
-        # Update start for next fold
-        start = end
-    
-    return df
 
 def avaluation(df_20,df_80):
     n_bins = 20

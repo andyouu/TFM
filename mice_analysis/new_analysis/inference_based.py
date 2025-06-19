@@ -12,8 +12,7 @@ from sklearn.metrics import (
 )
 import matplotlib.patches as mpatches
 from extra_plotting import *
-from model_avaluation import *
-from parsing import parsing
+from parsing import *
 
 
 
@@ -473,7 +472,6 @@ def inference_plot(df):
     
     # Combined plot for all mice
     if not separate_mice:
-        mice_counter = 0
         # Loop through possible n_back values (though j is hardcoded to 3)
         for j in [1,2,3,4,5]:
             j = 3  # Hardcoded override - always uses n_back=3

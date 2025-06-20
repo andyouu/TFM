@@ -608,7 +608,6 @@ if __name__ == '__main__':
     print(df['task'].unique())
     trained = 1
     new_df = parsing(df,trained,0)
-    glm(new_df)
     # Flag to control whether to plot mice separately or combined
     separate_mice = True
     # Combined plot for all mice
